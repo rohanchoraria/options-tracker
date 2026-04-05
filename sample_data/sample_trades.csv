@@ -1,0 +1,4 @@
+symbol,trade_type,strike_price,expiry_date,premium_received,quantity,lot_size,trade_date,notes
+RELIANCE,call,2900,2025-03-27,45.00,1,250,2025-03-05,Monthly covered call
+INFY,call,1800,2025-03-27,32.50,1,400,2025-03-06,Monthly covered call
+HDFCBANK,put,1550,2025-03-27,28.00,1,550,2025-03-07,Cash secured put
