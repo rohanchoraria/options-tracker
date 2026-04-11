@@ -293,12 +293,12 @@ with tab1:
     section_label("Equity Holdings")
     section_heading("Your portfolio at a glance")
 
-    col_add, col_import, col_broker = st.columns([1, 1, 2])
+    col_add, col_import = st.columns([1, 1])
 
     with col_add:
         with st.expander("➕ Add Holding"):
             with st.form("form_add_holding"):
-                sym = st.text_input("Symbol (e.g. RELIANCE)").strip().upper()
+                sym = st.selectbox("Symbol", [""] + sorted(upstox.INSTRUMENT_KEYS.keys()), key="add_holding_sym")
                 qty = st.number_input("Quantity", min_value=1, step=1)
                 cp = st.number_input("Cost Price (₹)", min_value=0.01, format="%.2f")
                 da = st.date_input("Date Added", value=date.today())
@@ -325,9 +325,6 @@ with tab1:
                         st.error(f"CSV must have columns: {required}")
                 except Exception as e:
                     st.error(str(e))
-
-    with col_broker:
-        st.info("Broker import available once API credentials are configured.")
 
     holdings = db.get_holdings()
 
