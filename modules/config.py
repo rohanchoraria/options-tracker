@@ -26,8 +26,14 @@ def _load():
     try:
         import streamlit as st
         _secrets = {k: str(st.secrets[k]) for k in st.secrets}
-    except Exception:
+        # DEBUG — remove after fix
+        import streamlit as _st
+        _st.write("DEBUG secrets keys:", list(_secrets.keys()))
+        _st.write("DEBUG SUPABASE_KEY prefix:", _secrets.get("SUPABASE_KEY", "NOT FOUND")[:20])
+    except Exception as e:
         _secrets = {}
+        import streamlit as _st
+        _st.write("DEBUG secrets load error:", str(e))
 
     return _secrets
 
