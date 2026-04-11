@@ -23,11 +23,8 @@ def _fetch_prices(symbols_tuple):
 
 
 def _render_html(html):
-    """Render raw HTML — uses st.html() if available, falls back to st.markdown."""
-    try:
-        st.html(html)
-    except AttributeError:
-        st.markdown(html, unsafe_allow_html=True)
+    """Render raw HTML inline — avoids st.html() iframes which cause layout flicker."""
+    st.markdown(html, unsafe_allow_html=True)
 
 
 # ── Page Config ───────────────────────────────────────────
