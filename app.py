@@ -189,26 +189,19 @@ input, select, textarea {
 
 def hero_bar(metrics):
     """
-    Dark ink hero bar with large mono metrics.
-    metrics: list of (label, value, color) — color is hex string.
+    Summary bar using native Streamlit columns.
+    metrics: list of (label, value, color) — color hex used for value styling.
     """
-    n = len(metrics)
-    items = ""
-    for i, (label, value, color) in enumerate(metrics):
-        border = "border-right:1px solid rgba(255,255,255,0.08);" if i < n - 1 else ""
-        items += f"""
-        <div style="flex:1;text-align:center;padding:0 20px;{border}">
-            <div style="font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:500;
-                        letter-spacing:0.1em;text-transform:uppercase;color:rgba(255,255,255,0.45);
-                        margin-bottom:10px;">{label}</div>
-            <div style="font-family:'JetBrains Mono',monospace;font-size:30px;font-weight:700;
-                        letter-spacing:-0.02em;color:{color};">{value}</div>
-        </div>"""
-    _render_html(f"""
-    <div style="background:#111827;border-radius:8px;padding:28px 16px;
-                display:flex;align-items:center;margin-bottom:20px;">
-        {items}
-    </div>""")
+    cols = st.columns(len(metrics))
+    for col, (label, value, color) in zip(cols, metrics):
+        col.markdown(
+            f"<div style='text-align:center;padding:12px 0;'>"
+            f"<div style='font-size:11px;font-weight:500;letter-spacing:0.08em;"
+            f"text-transform:uppercase;color:#9CA3AF;margin-bottom:6px;'>{label}</div>"
+            f"<div style='font-size:24px;font-weight:700;color:{color};font-family:monospace;'>{value}</div>"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
 
 
 def section_label(text):
