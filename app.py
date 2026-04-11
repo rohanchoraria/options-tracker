@@ -29,6 +29,19 @@ def _render_html(html):
 st.set_page_config(page_title="Options Tracker", page_icon="📈", layout="wide")
 db.init_db()
 
+# ── Password Gate ─────────────────────────────────────────
+if not st.session_state.get("authenticated"):
+    st.title("Options Tracker")
+    pwd = st.text_input("Password", type="password")
+    if st.button("Login"):
+        from modules.config import get as _get_secret
+        if pwd == _get_secret("APP_PASSWORD", ""):
+            st.session_state.authenticated = True
+            st.rerun()
+        else:
+            st.error("Incorrect password.")
+    st.stop()
+
 # ── Upstox OAuth Callback ─────────────────────────────────
 # When Upstox redirects back with ?code=..., capture and exchange it.
 _params = st.query_params
