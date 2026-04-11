@@ -22,6 +22,21 @@ def _fetch_prices(symbols_tuple):
     return market.get_multiple_stock_prices(list(symbols_tuple))
 
 
+@st.cache_data(ttl=60)
+def _get_holdings():
+    return db.get_holdings()
+
+
+@st.cache_data(ttl=60)
+def _get_trades(status=None):
+    return db.get_trades(status=status)
+
+
+def _clear_db_cache():
+    _get_holdings.clear()
+    _get_trades.clear()
+
+
 def _render_html(html):
     """Render raw HTML inline — avoids st.html() iframes which cause layout flicker."""
     st.markdown(html, unsafe_allow_html=True)
@@ -302,6 +317,7 @@ with tab1:
                     if sym:
                         db.add_holding(sym, qty, cp, da, notes)
                         st.success(f"{sym} added.")
+                        _clear_db_cache()
                         st.rerun()
 
     with col_import:
@@ -315,13 +331,14 @@ with tab1:
                     if required.issubset(df_h.columns):
                         db.bulk_insert_holdings(df_h.to_dict("records"))
                         st.success(f"{len(df_h)} holdings imported.")
+                        _clear_db_cache()
                         st.rerun()
                     else:
                         st.error(f"CSV must have columns: {required}")
                 except Exception as e:
                     st.error(str(e))
 
-    holdings = db.get_holdings()
+    holdings = _get_holdings()
     prices = {}
     rows = []
     total_invested = 0
@@ -406,6 +423,7 @@ with tab1:
                         else:
                             db.update_holding(sel_h["id"], new_qty, sel_h["cost_price"], sel_h.get("notes", ""))
                             st.success(f"Partial exit recorded. Sold {exit_qty} shares, {new_qty} remain. P&L: {fmt_inr(pnl)} ({pnl_pct:+.0f}%)")
+                        _clear_db_cache()
                         st.rerun()
 
             with st.expander("✏️ Edit a Holding"):
@@ -421,6 +439,7 @@ with tab1:
                     if st.form_submit_button("Save Changes"):
                         db.update_holding(eh["id"], e_qty, e_cp, e_notes)
                         st.success(f"{eh['symbol']} updated.")
+                        _clear_db_cache()
                         st.rerun()
 
             with st.expander("🗑️ Delete a Holding"):
@@ -429,6 +448,7 @@ with tab1:
                 if st.button("Delete", key="del_holding"):
                     db.delete_holding(holding_options_del[sel])
                     st.success("Deleted.")
+                    _clear_db_cache()
                     st.rerun()
         else:
             st.info("No holdings yet. Add one above or import a CSV.")
@@ -438,7 +458,7 @@ with tab1:
     # ── Section B: Open Call Opportunities ───────────────
 
     section_label("Call Opportunities")
-    open_trades = db.get_trades(status="open")
+    open_trades = _get_trades(status="open")
 
     with st.expander("Stocks with no call sold this month", expanded=True):
         if holdings:
@@ -495,6 +515,7 @@ with tab1:
                         db.add_trade(t_sym, t_type, t_strike, t_expiry, t_premium,
                                      t_qty, auto_lot, t_date, t_notes, direction=t_dir.lower())
                         st.success(f"Trade added: {t_dir} {t_sym} {t_type.upper()} {t_strike}")
+                        _clear_db_cache()
                         st.rerun()
 
     with col_t2:
@@ -509,6 +530,7 @@ with tab1:
                     if required_t.issubset(df_t.columns):
                         db.bulk_insert_trades(df_t.to_dict("records"))
                         st.success(f"{len(df_t)} trades imported.")
+                        _clear_db_cache()
                         st.rerun()
                     else:
                         st.error(f"CSV must have columns: {required_t}")
@@ -516,8 +538,8 @@ with tab1:
                     st.error(str(e))
 
     # Open positions table
-    open_trades = db.get_trades(status="open")
-    all_trades = db.get_trades()
+    open_trades = _get_trades(status="open")
+    all_trades = _get_trades()
 
     # Summary always visible
     if open_trades:
@@ -595,6 +617,7 @@ with tab1:
                         db.update_trade(et["id"], e_strike, e_expiry, e_premium,
                                         e_qty, auto_edit_lot, e_notes, e_dir, e_type)
                         st.success("Trade updated.")
+                        _clear_db_cache()
                         st.rerun()
         else:
             st.info("No open positions. Add a trade above.")
@@ -695,6 +718,7 @@ with tab1:
                                                         notes=f"Exercise: {direction} {t_type}")
 
                 st.success("Outcome recorded.")
+                _clear_db_cache()
                 st.rerun()
 
     # ── Trade History ─────────────────────────────────────
@@ -759,6 +783,7 @@ with tab1:
                 if st.button("Delete Trade"):
                     db.delete_trade(del_opts[sel_del])
                     st.success("Deleted.")
+                    _clear_db_cache()
                     st.rerun()
 
         # ── Monthly Summary ───────────────────────────────
@@ -802,7 +827,7 @@ with tab2:
             )
             st.success(msg) if ok else st.error(msg)
 
-    open_trades = db.get_trades(status="open")
+    open_trades = _get_trades(status="open")
 
     if not open_trades:
         st.info("No open trades to monitor.")
@@ -811,7 +836,9 @@ with tab2:
         threshold = float(settings.get("risk_threshold_pct", 2.0))
         days_alert = int(settings.get("days_to_expiry_alert", 5))
 
-        auto_refresh = st.toggle("Auto-refresh every 60s", value=False)
+        if st.button("🔄 Refresh Risk Monitor", key="refresh_risk"):
+            _fetch_prices.clear()
+            st.rerun()
 
         with st.spinner("Fetching live prices for open positions..."):
             symbols = list(set(t["symbol"] for t in open_trades))
@@ -905,9 +932,6 @@ with tab2:
         else:
             st.success("All positions are safe.")
 
-        if auto_refresh:
-            time.sleep(60)
-            st.rerun()
 
 
 # ══════════════════════════════════════════════════════════
@@ -928,12 +952,14 @@ with tab3:
                 new_wl = st.selectbox("Add symbol", [""] + known_symbols)
                 if st.form_submit_button("Add") and new_wl:
                     db.add_to_watchlist(new_wl)
+                    _clear_db_cache()
                     st.rerun()
         if watchlist:
             with wl_col2:
                 rem = st.selectbox("Remove", watchlist)
                 if st.button("Remove"):
                     db.remove_from_watchlist(rem)
+                    _clear_db_cache()
                     st.rerun()
 
     # ── Watchlist Data (auto-loads) ───────────────────────
@@ -1037,6 +1063,7 @@ with tab3:
                 if add_wl_sym != "—" and st.button("Add to Watchlist"):
                     db.add_to_watchlist(add_wl_sym)
                     st.success(f"{add_wl_sym} added to watchlist.")
+                    _clear_db_cache()
                     st.rerun()
             else:
                 st.warning("No data returned. Connect Upstox or check market hours.")
@@ -1060,8 +1087,8 @@ with tab4:
     section_heading("Realised & unrealised across equity and options")
 
     # ── Load data ─────────────────────────────────────────
-    all_trades_summary = db.get_trades()
-    holdings_summary = db.get_holdings()
+    all_trades_summary = _get_trades()
+    holdings_summary = _get_holdings()
     equity_trades = db.get_equity_trades()
 
     # ── Realised: Options ─────────────────────────────────
