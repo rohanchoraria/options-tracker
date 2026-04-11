@@ -24,7 +24,8 @@ def _url(table):
 
 def _get(table, params=None):
     r = requests.get(_url(table), headers=_headers(), params=params)
-    r.raise_for_status()
+    if not r.ok:
+        raise Exception(f"Supabase {table} GET failed: {r.status_code} — {r.text}")
     return r.json()
 
 
