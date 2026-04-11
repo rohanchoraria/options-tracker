@@ -291,7 +291,6 @@ with tab1:
     # ── Section A: Equity Holdings ────────────────────────
 
     section_label("Equity Holdings")
-    section_heading("Your portfolio at a glance")
 
     col_add, col_import = st.columns([1, 1])
 
@@ -327,15 +326,15 @@ with tab1:
                     st.error(str(e))
 
     holdings = db.get_holdings()
+    prices = {}
+    rows = []
+    total_invested = 0
+    total_current = 0
 
     if holdings:
         symbols = [h["symbol"] for h in holdings]
         with st.spinner("Fetching live prices..."):
             prices = market.get_multiple_stock_prices(symbols)
-
-        rows = []
-        total_invested = 0
-        total_current = 0
 
         for h in holdings:
             cp_val = h["cost_price"] * h["quantity"]
@@ -358,7 +357,7 @@ with tab1:
                 "Notes": h.get("notes", ""),
             })
 
-        # Hero bar
+        # Summary always visible
         total_pnl = total_current - total_invested if total_current else 0
         total_pnl_pct = (total_pnl / total_invested * 100) if total_invested > 0 else 0
         hero_bar([
@@ -368,67 +367,73 @@ with tab1:
             ("Return", f"{total_pnl_pct:+.0f}%", "#16A34A" if total_pnl_pct >= 0 else "#DC2626"),
         ])
 
-        df_display = pd.DataFrame(rows)
-        st.dataframe(
-            style_pnl_df(df_display, "P&L (₹)", "P&L %"),
-            use_container_width=True,
-            hide_index=True,
-            column_config={
-                "Cost Price (₹)": st.column_config.NumberColumn(format="%.2f"),
-                "Current Price (₹)": st.column_config.NumberColumn(format="%.2f"),
-                "Invested (₹)": st.column_config.NumberColumn(format="%.0f"),
-                "Current Value (₹)": st.column_config.NumberColumn(format="%.0f"),
-                "P&L (₹)": st.column_config.NumberColumn(format="%.0f"),
-            },
-        )
+    with st.expander("Portfolio at a glance", expanded=True):
+        if holdings:
+            df_display = pd.DataFrame(rows)
+            st.dataframe(
+                style_pnl_df(df_display, "P&L (₹)", "P&L %"),
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "Cost Price (₹)": st.column_config.NumberColumn(format="%.2f"),
+                    "Current Price (₹)": st.column_config.NumberColumn(format="%.2f"),
+                    "Invested (₹)": st.column_config.NumberColumn(format="%.0f"),
+                    "Current Value (₹)": st.column_config.NumberColumn(format="%.0f"),
+                    "P&L (₹)": st.column_config.NumberColumn(format="%.0f"),
+                },
+            )
 
-        with st.expander("📤 Record Exit / Sell"):
-            holding_options = {f"{h['symbol']} — {h['quantity']} shares @ ₹{h['cost_price']}": h for h in holdings}
-            sel_label = st.selectbox("Select holding", list(holding_options.keys()), key="exit_sel")
-            sel_h = holding_options[sel_label]
-            with st.form("form_exit_holding"):
-                exit_qty = st.number_input("Quantity sold", min_value=1, max_value=int(sel_h["quantity"]), value=int(sel_h["quantity"]))
-                exit_price = st.number_input("Sell price (₹)", min_value=0.01, format="%.2f", value=float(sel_h["cost_price"]))
-                exit_date = st.date_input("Exit date", value=date.today(), key="exit_date")
-                exit_notes = st.text_input("Notes (optional)", key="exit_notes")
-                if st.form_submit_button("Record Exit"):
-                    proceeds = exit_qty * exit_price
-                    cost = exit_qty * sel_h["cost_price"]
-                    pnl = proceeds - cost
-                    pnl_pct = (pnl / cost * 100) if cost > 0 else 0
-                    db.add_equity_trade(sel_h["symbol"], exit_qty, sel_h["cost_price"],
-                                        exit_price, round(pnl, 2), exit_date, exit_notes)
-                    new_qty = sel_h["quantity"] - exit_qty
-                    if new_qty <= 0:
-                        db.delete_holding(sel_h["id"])
-                        st.success(f"Full exit recorded. P&L: {fmt_inr(pnl)} ({pnl_pct:+.0f}%)")
-                    else:
-                        db.update_holding(sel_h["id"], new_qty, sel_h["cost_price"], sel_h.get("notes", ""))
-                        st.success(f"Partial exit recorded. Sold {exit_qty} shares, {new_qty} remain. P&L: {fmt_inr(pnl)} ({pnl_pct:+.0f}%)")
+            with st.expander("📤 Record Exit / Sell"):
+                holding_options = {f"{h['symbol']} — {h['quantity']} shares @ ₹{h['cost_price']}": h for h in holdings}
+                sel_label = st.selectbox("Select holding", list(holding_options.keys()), key="exit_sel")
+                sel_h = holding_options[sel_label]
+                with st.form("form_exit_holding"):
+                    exit_qty = st.number_input("Quantity sold", min_value=1, max_value=int(sel_h["quantity"]),
+                                               value=int(sel_h["quantity"]), key=f"exit_qty_{sel_h['id']}")
+                    exit_price = st.number_input("Sell price (₹)", min_value=0.01, format="%.2f",
+                                                 value=float(sel_h["cost_price"]), key=f"exit_price_{sel_h['id']}")
+                    exit_date = st.date_input("Exit date", value=date.today(), key="exit_date")
+                    exit_notes = st.text_input("Notes (optional)", key="exit_notes")
+                    if st.form_submit_button("Record Exit"):
+                        proceeds = exit_qty * exit_price
+                        cost = exit_qty * sel_h["cost_price"]
+                        pnl = proceeds - cost
+                        pnl_pct = (pnl / cost * 100) if cost > 0 else 0
+                        db.add_equity_trade(sel_h["symbol"], exit_qty, sel_h["cost_price"],
+                                            exit_price, round(pnl, 2), exit_date, exit_notes)
+                        new_qty = sel_h["quantity"] - exit_qty
+                        if new_qty <= 0:
+                            db.delete_holding(sel_h["id"])
+                            st.success(f"Full exit recorded. P&L: {fmt_inr(pnl)} ({pnl_pct:+.0f}%)")
+                        else:
+                            db.update_holding(sel_h["id"], new_qty, sel_h["cost_price"], sel_h.get("notes", ""))
+                            st.success(f"Partial exit recorded. Sold {exit_qty} shares, {new_qty} remain. P&L: {fmt_inr(pnl)} ({pnl_pct:+.0f}%)")
+                        st.rerun()
+
+            with st.expander("✏️ Edit a Holding"):
+                holding_options_edit = {f"{h['symbol']} — {h['quantity']} shares @ ₹{h['cost_price']}": h for h in holdings}
+                sel_edit_h_label = st.selectbox("Select holding to edit", list(holding_options_edit.keys()), key="edit_holding_sel")
+                eh = holding_options_edit[sel_edit_h_label]
+                with st.form("form_edit_holding"):
+                    e_qty = st.number_input("Quantity", min_value=1, step=1,
+                                            value=int(eh["quantity"]), key=f"eh_qty_{eh['id']}")
+                    e_cp = st.number_input("Cost Price (₹)", min_value=0.01, format="%.2f",
+                                           value=float(eh["cost_price"]), key=f"eh_cp_{eh['id']}")
+                    e_notes = st.text_input("Notes", value=eh.get("notes", ""), key=f"eh_notes_{eh['id']}")
+                    if st.form_submit_button("Save Changes"):
+                        db.update_holding(eh["id"], e_qty, e_cp, e_notes)
+                        st.success(f"{eh['symbol']} updated.")
+                        st.rerun()
+
+            with st.expander("🗑️ Delete a Holding"):
+                holding_options_del = {f"{h['symbol']} (ID {h['id']})": h["id"] for h in holdings}
+                sel = st.selectbox("Select holding to delete", list(holding_options_del.keys()))
+                if st.button("Delete", key="del_holding"):
+                    db.delete_holding(holding_options_del[sel])
+                    st.success("Deleted.")
                     st.rerun()
-
-        with st.expander("✏️ Edit a Holding"):
-            holding_options_edit = {f"{h['symbol']} — {h['quantity']} shares @ ₹{h['cost_price']}": h for h in holdings}
-            sel_edit_h_label = st.selectbox("Select holding to edit", list(holding_options_edit.keys()), key="edit_holding_sel")
-            eh = holding_options_edit[sel_edit_h_label]
-            with st.form("form_edit_holding"):
-                e_qty = st.number_input("Quantity", min_value=1, step=1, value=int(eh["quantity"]))
-                e_cp = st.number_input("Cost Price (₹)", min_value=0.01, format="%.2f", value=float(eh["cost_price"]))
-                e_notes = st.text_input("Notes", value=eh.get("notes", ""))
-                if st.form_submit_button("Save Changes"):
-                    db.update_holding(eh["id"], e_qty, e_cp, e_notes)
-                    st.success(f"{eh['symbol']} updated.")
-                    st.rerun()
-
-        with st.expander("🗑️ Delete a Holding"):
-            holding_options_del = {f"{h['symbol']} (ID {h['id']})": h["id"] for h in holdings}
-            sel = st.selectbox("Select holding to delete", list(holding_options_del.keys()))
-            if st.button("Delete", key="del_holding"):
-                db.delete_holding(holding_options_del[sel])
-                st.success("Deleted.")
-                st.rerun()
-    else:
-        st.info("No holdings yet. Add one above or import a CSV.")
+        else:
+            st.info("No holdings yet. Add one above or import a CSV.")
 
     st.divider()
 
@@ -485,13 +490,12 @@ with tab1:
                 premium_label = "Premium Received (₹)" if t_dir == "Sell" else "Premium Paid (₹)"
                 t_premium = st.number_input(premium_label, min_value=0.01, format="%.2f")
                 t_qty = st.number_input("Lots", min_value=1, step=1)
-                t_lot = st.number_input("Lot Size", min_value=1, step=1, value=auto_lot)
                 t_date = st.date_input("Trade Date", value=date.today())
                 t_notes = st.text_input("Notes (optional)")
                 if st.form_submit_button("Add Trade"):
                     if t_sym:
                         db.add_trade(t_sym, t_type, t_strike, t_expiry, t_premium,
-                                     t_qty, t_lot, t_date, t_notes, direction=t_dir.lower())
+                                     t_qty, auto_lot, t_date, t_notes, direction=t_dir.lower())
                         st.success(f"Trade added: {t_dir} {t_sym} {t_type.upper()} {t_strike}")
                         st.rerun()
 
@@ -516,6 +520,21 @@ with tab1:
     # Open positions table
     open_trades = db.get_trades(status="open")
     all_trades = db.get_trades()
+
+    # Summary always visible
+    if open_trades:
+        op_total_premium = sum(
+            t["premium_received"] * t["quantity"] * t["lot_size"]
+            for t in open_trades if (t.get("direction") or "sell") == "sell"
+        )
+        op_days = [calc.is_expiry_near(t["expiry_date"], 999)[1] for t in open_trades]
+        nearest_exp = min(op_days) if op_days else None
+        hero_bar([
+            ("Open Positions", str(len(open_trades)), "#FFFFFF"),
+            ("Total Premium Recv", fmt_inr(op_total_premium), "#16A34A"),
+            ("Nearest Expiry", f"{nearest_exp}d" if nearest_exp is not None else "—",
+             "#DC2626" if nearest_exp is not None and nearest_exp <= 7 else "#FFFFFF"),
+        ])
 
     with st.expander(f"Current options positions ({len(open_trades)} open)", expanded=True):
         if open_trades:
@@ -555,27 +574,28 @@ with tab1:
                 }
                 sel_edit_label = st.selectbox("Select trade to edit", list(edit_opts.keys()), key="edit_trade_sel")
                 et = edit_opts[sel_edit_label]
+                auto_edit_lot = market.get_lot_size(et["symbol"])
+                st.caption(f"Lot size for {et['symbol']}: {auto_edit_lot}")
                 with st.form("form_edit_trade"):
                     e_dir = st.radio("Direction", ["Sell", "Buy"], horizontal=True,
                                      index=0 if (et.get("direction") or "sell").lower() == "sell" else 1,
-                                     key="edit_dir")
+                                     key=f"edit_dir_{et['id']}")
                     e_type = st.selectbox("Option Type", ["call", "put"],
-                                          index=0 if et["trade_type"] == "call" else 1, key="edit_type")
+                                          index=0 if et["trade_type"] == "call" else 1,
+                                          key=f"edit_type_{et['id']}")
                     e_strike = st.number_input("Strike Price (₹)", min_value=0.01, format="%.2f",
-                                               value=float(et["strike_price"]), key="edit_strike")
+                                               value=float(et["strike_price"]), key=f"edit_strike_{et['id']}")
                     e_expiry = st.date_input("Expiry Date",
                                              value=datetime.strptime(et["expiry_date"], "%Y-%m-%d").date(),
-                                             key="edit_expiry")
+                                             key=f"edit_expiry_{et['id']}")
                     e_premium = st.number_input("Premium (₹)", min_value=0.01, format="%.2f",
-                                                value=float(et["premium_received"]), key="edit_premium")
+                                                value=float(et["premium_received"]), key=f"edit_premium_{et['id']}")
                     e_qty = st.number_input("Lots", min_value=1, step=1,
-                                            value=int(et["quantity"]), key="edit_qty")
-                    e_lot = st.number_input("Lot Size", min_value=1, step=1,
-                                            value=int(et["lot_size"]), key="edit_lot")
-                    e_notes = st.text_input("Notes", value=et.get("notes", ""), key="edit_notes")
+                                            value=int(et["quantity"]), key=f"edit_qty_{et['id']}")
+                    e_notes = st.text_input("Notes", value=et.get("notes", ""), key=f"edit_notes_{et['id']}")
                     if st.form_submit_button("Save Changes"):
                         db.update_trade(et["id"], e_strike, e_expiry, e_premium,
-                                        e_qty, e_lot, e_notes, e_dir, e_type)
+                                        e_qty, auto_edit_lot, e_notes, e_dir, e_type)
                         st.success("Trade updated.")
                         st.rerun()
         else:
