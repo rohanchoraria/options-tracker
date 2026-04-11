@@ -73,12 +73,7 @@ with st.sidebar:
         st.warning("Upstox not connected")
         st.caption("Connect to fetch live option premiums.")
         auth_url = upstox.get_auth_url()
-        _render_html(
-            f'<a href="{auth_url}" target="_self" style="text-decoration:none;">'
-            f'<div style="background:#2563EB;color:#fff;text-align:center;padding:8px 12px;'
-            f'border-radius:4px;font-family:Inter,sans-serif;font-size:14px;font-weight:600;'
-            f'cursor:pointer;">Login with Upstox</div></a>'
-        )
+        st.link_button("Login with Upstox", auth_url, use_container_width=True)
 
 # ── Atlas Design System — CSS Injection ───────────────────
 
