@@ -204,19 +204,12 @@ input, select, textarea {
 
 def hero_bar(metrics):
     """
-    Summary bar using native Streamlit columns.
-    metrics: list of (label, value, color) — color hex used for value styling.
+    Summary bar using native st.metric widgets.
+    metrics: list of (label, value, color) — color unused but kept for API compat.
     """
     cols = st.columns(len(metrics))
-    for col, (label, value, color) in zip(cols, metrics):
-        col.markdown(
-            f"<div style='text-align:center;padding:12px 0;'>"
-            f"<div style='font-size:11px;font-weight:500;letter-spacing:0.08em;"
-            f"text-transform:uppercase;color:#9CA3AF;margin-bottom:6px;'>{label}</div>"
-            f"<div style='font-size:24px;font-weight:700;color:{color};font-family:monospace;'>{value}</div>"
-            f"</div>",
-            unsafe_allow_html=True,
-        )
+    for col, (label, value, _color) in zip(cols, metrics):
+        col.metric(label=label, value=value)
 
 
 def section_label(text):
@@ -348,8 +341,7 @@ with tab1:
         symbols = [h["symbol"] for h in holdings]
         if st.button("🔄 Refresh Prices", key="refresh_prices"):
             _fetch_prices.clear()
-        with st.spinner("Fetching live prices..."):
-            prices = _fetch_prices(tuple(sorted(symbols)))
+        prices = _fetch_prices(tuple(sorted(symbols)))
 
         for h in holdings:
             cp_val = h["cost_price"] * h["quantity"]
@@ -840,9 +832,8 @@ with tab2:
             _fetch_prices.clear()
             st.rerun()
 
-        with st.spinner("Fetching live prices for open positions..."):
-            symbols = list(set(t["symbol"] for t in open_trades))
-            prices = _fetch_prices(tuple(sorted(symbols)))
+        symbols = list(set(t["symbol"] for t in open_trades))
+        prices = _fetch_prices(tuple(sorted(symbols)))
 
         risk_rows = []
         at_risk_list = []
@@ -1109,8 +1100,7 @@ with tab4:
     # ── Unrealised: Holdings ──────────────────────────────
     holding_symbols = list(set(h["symbol"] for h in holdings_summary))
     if holding_symbols:
-        with st.spinner("Fetching live prices..."):
-            live_prices = _fetch_prices(tuple(sorted(holding_symbols)))
+        live_prices = _fetch_prices(tuple(sorted(holding_symbols)))
     else:
         live_prices = {}
 
