@@ -29,6 +29,20 @@ def _render_html(html):
 st.set_page_config(page_title="Options Tracker", page_icon="📈", layout="wide")
 db.init_db()
 
+# ── Upstox OAuth Callback (must run before password gate) ─
+_params = st.query_params
+if "code" in _params and "upstox_token" not in st.session_state:
+    with st.spinner("Connecting to Upstox..."):
+        _token = upstox.exchange_code(_params["code"])
+    if _token:
+        st.session_state.upstox_token = _token
+        st.session_state.authenticated = True
+        st.query_params.clear()
+        st.rerun()
+    else:
+        st.error("Upstox login failed — please try again.")
+        st.query_params.clear()
+
 # ── Password Gate ─────────────────────────────────────────
 if not st.session_state.get("authenticated"):
     st.title("Options Tracker")
@@ -41,20 +55,6 @@ if not st.session_state.get("authenticated"):
         else:
             st.error("Incorrect password.")
     st.stop()
-
-# ── Upstox OAuth Callback ─────────────────────────────────
-# When Upstox redirects back with ?code=..., capture and exchange it.
-_params = st.query_params
-if "code" in _params and "upstox_token" not in st.session_state:
-    with st.spinner("Connecting to Upstox..."):
-        _token = upstox.exchange_code(_params["code"])
-    if _token:
-        st.session_state.upstox_token = _token
-        st.query_params.clear()
-        st.rerun()
-    else:
-        st.error("Upstox login failed — please try again.")
-        st.query_params.clear()
 
 # ── Upstox Sidebar ────────────────────────────────────────
 with st.sidebar:
