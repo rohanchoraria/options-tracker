@@ -235,25 +235,19 @@ def pnl_color(val):
 
 
 def style_pnl_df(df, pnl_col="P&L (₹)", pct_col=None):
-    """Apply green/red coloring to P&L columns and center-align all but the first column."""
-    def color_val(val):
+    """Apply green/red coloring to P&L columns."""
+    def color_pnl(val):
         try:
-            v = float(str(val).replace("₹", "").replace(",", "").replace("%", ""))
+            v = float(str(val).replace("₹", "").replace(",", "").replace("%", "").replace("+", ""))
             color = "#16A34A" if v >= 0 else "#DC2626"
-            return f"color:{color};font-family:'JetBrains Mono',monospace;font-weight:600;text-align:center;"
+            return f"color:{color};font-weight:600;"
         except Exception:
             return ""
 
     styler = df.style
-    # Center-align all columns except the first
-    if len(df.columns) > 1:
-        styler = styler.set_properties(subset=list(df.columns[1:]), **{"text-align": "center"})
-    # Left-align the first column
-    styler = styler.set_properties(subset=[df.columns[0]], **{"text-align": "left"})
-    # P&L coloring
     cols = [c for c in [pnl_col, pct_col] if c and c in df.columns]
     for col in cols:
-        styler = styler.applymap(color_val, subset=[col])
+        styler = styler.applymap(color_pnl, subset=[col])
     return styler
 
 
@@ -864,7 +858,11 @@ with tab3:
         wl_results = st.session_state.get("wl_data", [])
         if wl_results:
             df_wl = pd.DataFrame(wl_results).sort_values("Call %", ascending=False)
-            st.dataframe(df_wl, use_container_width=True, hide_index=True)
+            st.dataframe(style_pnl_df(df_wl), use_container_width=True, hide_index=True,
+                         column_config={
+                             "Call %": st.column_config.NumberColumn(format="%.2f%%"),
+                             "Put %": st.column_config.NumberColumn(format="%.2f%%"),
+                         })
         else:
             st.warning("No data returned. Connect Upstox or check market hours.")
 
@@ -914,6 +912,8 @@ with tab3:
                     df_screen = df_screen[df_screen["Put %"] >= min_put_pct]
 
                 df_screen = df_screen.sort_values("Call %", ascending=False)
+                top_call = df_screen["Call %"].max()
+                top_put = df_screen["Put %"].max()
 
                 wl_set = set(db.get_watchlist())
                 df_screen["Watchlist"] = df_screen["Symbol"].apply(lambda s: "⭐" if s in wl_set else "")
@@ -921,11 +921,15 @@ with tab3:
                 hero_bar([
                     ("Stocks Scanned", str(total), "#FFFFFF"),
                     ("Results Shown", str(len(df_screen)), "#FFFFFF"),
-                    ("Top Call %", f"{df_screen['Call %'].max():.2f}%", "#16A34A"),
-                    ("Top Put %", f"{df_screen['Put %'].max():.2f}%", "#16A34A"),
+                    ("Top Call %", f"{top_call:.2f}%", "#16A34A"),
+                    ("Top Put %", f"{top_put:.2f}%", "#16A34A"),
                 ])
 
-                st.dataframe(df_screen, use_container_width=True, hide_index=True)
+                st.dataframe(style_pnl_df(df_screen), use_container_width=True, hide_index=True,
+                             column_config={
+                                 "Call %": st.column_config.NumberColumn(format="%.2f%%"),
+                                 "Put %": st.column_config.NumberColumn(format="%.2f%%"),
+                             })
 
                 add_wl_sym = st.selectbox("Add to watchlist from results",
                                           ["—"] + df_screen["Symbol"].tolist())
