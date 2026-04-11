@@ -349,8 +349,8 @@ with tab1:
             rows.append({
                 "Symbol": h["symbol"],
                 "Qty": h["quantity"],
-                "Cost Price (₹)": round(h["cost_price"]),
-                "Current Price (₹)": round(cur_price) if cur_price else None,
+                "Cost Price (₹)": round(h["cost_price"], 2),
+                "Current Price (₹)": round(cur_price, 2) if cur_price else None,
                 "Invested (₹)": round(cp_val),
                 "Current Value (₹)": round(cur_val) if cur_val else None,
                 "P&L (₹)": round(pnl_amt) if pnl_amt is not None else None,
@@ -374,8 +374,8 @@ with tab1:
             use_container_width=True,
             hide_index=True,
             column_config={
-                "Cost Price (₹)": st.column_config.NumberColumn(format="%.0f"),
-                "Current Price (₹)": st.column_config.NumberColumn(format="%.0f"),
+                "Cost Price (₹)": st.column_config.NumberColumn(format="%.2f"),
+                "Current Price (₹)": st.column_config.NumberColumn(format="%.2f"),
                 "Invested (₹)": st.column_config.NumberColumn(format="%.0f"),
                 "Current Value (₹)": st.column_config.NumberColumn(format="%.0f"),
                 "P&L (₹)": st.column_config.NumberColumn(format="%.0f"),
