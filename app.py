@@ -435,49 +435,48 @@ with tab1:
     # ── Section B: Open Call Opportunities ───────────────
 
     section_label("Call Opportunities")
-    section_heading("Stocks with no call sold this month")
-
     open_trades = db.get_trades(status="open")
 
-    if holdings:
-        opportunities = calc.get_open_opportunities(holdings, open_trades)
-        if opportunities:
-            opp_rows = []
-            for h in opportunities:
-                cur_price = prices.get(h["symbol"]) if holdings else None
-                lot = market.get_lot_size(h["symbol"])
-                opp_rows.append({
-                    "Symbol": h["symbol"],
-                    "Qty Held": h["quantity"],
-                    "Cost Price (₹)": round(h["cost_price"]),
-                    "Current Price (₹)": round(cur_price) if cur_price else None,
-                    "Lot Size": lot,
-                    "Notes": h.get("notes", ""),
-                })
-            st.warning(f"⚡ {len(opportunities)} stock(s) with no call sold this month")
-            st.dataframe(pd.DataFrame(opp_rows), use_container_width=True, hide_index=True,
-                         column_config={
-                             "Cost Price (₹)": st.column_config.NumberColumn(format="%.0f"),
-                             "Current Price (₹)": st.column_config.NumberColumn(format="%.0f"),
-                         })
+    with st.expander("Stocks with no call sold this month", expanded=True):
+        if holdings:
+            opportunities = calc.get_open_opportunities(holdings, open_trades)
+            if opportunities:
+                opp_rows = []
+                for h in opportunities:
+                    cur_price = prices.get(h["symbol"]) if holdings else None
+                    lot = market.get_lot_size(h["symbol"])
+                    opp_rows.append({
+                        "Symbol": h["symbol"],
+                        "Qty Held": h["quantity"],
+                        "Cost Price (₹)": round(h["cost_price"]),
+                        "Current Price (₹)": round(cur_price) if cur_price else None,
+                        "Lot Size": lot,
+                        "Notes": h.get("notes", ""),
+                    })
+                st.warning(f"⚡ {len(opportunities)} stock(s) with no call sold this month")
+                st.dataframe(pd.DataFrame(opp_rows), use_container_width=True, hide_index=True,
+                             column_config={
+                                 "Cost Price (₹)": st.column_config.NumberColumn(format="%.0f"),
+                                 "Current Price (₹)": st.column_config.NumberColumn(format="%.0f"),
+                             })
+            else:
+                st.success("All holdings have a call sold for this month.")
         else:
-            st.success("All holdings have a call sold for this month.")
-    else:
-        st.info("Add holdings above to track call opportunities.")
+            st.info("Add holdings above to track call opportunities.")
 
     st.divider()
 
     # ── Section C: Open Positions ─────────────────────────
 
     section_label("Open Positions")
-    section_heading("Current options positions")
 
     col_t1, col_t2 = st.columns([1, 1])
     with col_t1:
         with st.expander("➕ Add Trade"):
+            known_syms = sorted(upstox.INSTRUMENT_KEYS.keys())
+            t_sym = st.selectbox("Symbol", [""] + known_syms, key="add_trade_sym")
+            auto_lot = market.get_lot_size(t_sym) if t_sym else 1
             with st.form("form_add_trade"):
-                known_syms = sorted(upstox.INSTRUMENT_KEYS.keys())
-                t_sym = st.selectbox("Symbol", [""] + known_syms, key="add_trade_sym")
                 t_dir = st.radio("Direction", ["Sell", "Buy"], horizontal=True,
                                  help="Sell = write/short the option. Buy = long the option.")
                 t_type = st.selectbox("Option Type", ["call", "put"])
@@ -486,8 +485,7 @@ with tab1:
                 premium_label = "Premium Received (₹)" if t_dir == "Sell" else "Premium Paid (₹)"
                 t_premium = st.number_input(premium_label, min_value=0.01, format="%.2f")
                 t_qty = st.number_input("Lots", min_value=1, step=1)
-                t_lot = st.number_input("Lot Size", min_value=1, step=1,
-                                        value=market.get_lot_size(t_sym) if t_sym else 1)
+                t_lot = st.number_input("Lot Size", min_value=1, step=1, value=auto_lot)
                 t_date = st.date_input("Trade Date", value=date.today())
                 t_notes = st.text_input("Notes (optional)")
                 if st.form_submit_button("Add Trade"):
@@ -519,166 +517,167 @@ with tab1:
     open_trades = db.get_trades(status="open")
     all_trades = db.get_trades()
 
+    with st.expander(f"Current options positions ({len(open_trades)} open)", expanded=True):
+        if open_trades:
+            open_rows = []
+            for t in open_trades:
+                direction = t.get("direction") or "sell"
+                premium_total = t["premium_received"] * t["quantity"] * t["lot_size"]
+                _, days_left = calc.is_expiry_near(t["expiry_date"], 999)
+                premium_col = "Premium Recv (₹)" if direction == "sell" else "Premium Paid (₹)"
+                open_rows.append({
+                    "Symbol": t["symbol"],
+                    "Direction": direction.upper(),
+                    "Type": t["trade_type"].upper(),
+                    "Strike (₹)": round(t["strike_price"]),
+                    "Expiry": t["expiry_date"],
+                    "Days Left": days_left,
+                    premium_col: round(t["premium_received"], 1),
+                    "Lots": t["quantity"],
+                    "Lot Size": t["lot_size"],
+                    "Total (₹)": round(premium_total),
+                    "Trade Date": t["trade_date"],
+                    "Notes": t.get("notes", ""),
+                })
+            st.dataframe(pd.DataFrame(open_rows), use_container_width=True, hide_index=True,
+                         column_config={
+                             "Strike (₹)": st.column_config.NumberColumn(format="%.0f"),
+                             "Premium Recv (₹)": st.column_config.NumberColumn(format="%.1f"),
+                             "Premium Paid (₹)": st.column_config.NumberColumn(format="%.1f"),
+                             "Total (₹)": st.column_config.NumberColumn(format="%.0f"),
+                         })
+
+            # ── Edit Trade ────────────────────────────────────
+            with st.expander("✏️ Edit a Trade"):
+                edit_opts = {
+                    f"{t.get('direction','sell').upper()} {t['symbol']} {t['trade_type'].upper()} {t['strike_price']} exp {t['expiry_date']} (ID {t['id']})": t
+                    for t in open_trades
+                }
+                sel_edit_label = st.selectbox("Select trade to edit", list(edit_opts.keys()), key="edit_trade_sel")
+                et = edit_opts[sel_edit_label]
+                with st.form("form_edit_trade"):
+                    e_dir = st.radio("Direction", ["Sell", "Buy"], horizontal=True,
+                                     index=0 if (et.get("direction") or "sell").lower() == "sell" else 1,
+                                     key="edit_dir")
+                    e_type = st.selectbox("Option Type", ["call", "put"],
+                                          index=0 if et["trade_type"] == "call" else 1, key="edit_type")
+                    e_strike = st.number_input("Strike Price (₹)", min_value=0.01, format="%.2f",
+                                               value=float(et["strike_price"]), key="edit_strike")
+                    e_expiry = st.date_input("Expiry Date",
+                                             value=datetime.strptime(et["expiry_date"], "%Y-%m-%d").date(),
+                                             key="edit_expiry")
+                    e_premium = st.number_input("Premium (₹)", min_value=0.01, format="%.2f",
+                                                value=float(et["premium_received"]), key="edit_premium")
+                    e_qty = st.number_input("Lots", min_value=1, step=1,
+                                            value=int(et["quantity"]), key="edit_qty")
+                    e_lot = st.number_input("Lot Size", min_value=1, step=1,
+                                            value=int(et["lot_size"]), key="edit_lot")
+                    e_notes = st.text_input("Notes", value=et.get("notes", ""), key="edit_notes")
+                    if st.form_submit_button("Save Changes"):
+                        db.update_trade(et["id"], e_strike, e_expiry, e_premium,
+                                        e_qty, e_lot, e_notes, e_dir, e_type)
+                        st.success("Trade updated.")
+                        st.rerun()
+        else:
+            st.info("No open positions. Add a trade above.")
+
+    # ── Record Outcome (end of month) ─────────────────
     if open_trades:
-        open_rows = []
-        for t in open_trades:
-            direction = t.get("direction") or "sell"
-            premium_total = t["premium_received"] * t["quantity"] * t["lot_size"]
-            _, days_left = calc.is_expiry_near(t["expiry_date"], 999)
-            premium_col = "Premium Recv (₹)" if direction == "sell" else "Premium Paid (₹)"
-            open_rows.append({
-                "Symbol": t["symbol"],
-                "Direction": direction.upper(),
-                "Type": t["trade_type"].upper(),
-                "Strike (₹)": round(t["strike_price"]),
-                "Expiry": t["expiry_date"],
-                "Days Left": days_left,
-                premium_col: round(t["premium_received"], 1),
-                "Lots": t["quantity"],
-                "Lot Size": t["lot_size"],
-                "Total (₹)": round(premium_total),
-                "Trade Date": t["trade_date"],
-                "Notes": t.get("notes", ""),
-            })
-        st.dataframe(pd.DataFrame(open_rows), use_container_width=True, hide_index=True,
-                     column_config={
-                         "Strike (₹)": st.column_config.NumberColumn(format="%.0f"),
-                         "Premium Recv (₹)": st.column_config.NumberColumn(format="%.1f"),
-                         "Premium Paid (₹)": st.column_config.NumberColumn(format="%.1f"),
-                         "Total (₹)": st.column_config.NumberColumn(format="%.0f"),
-                     })
-
-        # ── Edit Trade ────────────────────────────────────
-        with st.expander("✏️ Edit a Trade"):
-            edit_opts = {
-                f"{t.get('direction','sell').upper()} {t['symbol']} {t['trade_type'].upper()} {t['strike_price']} exp {t['expiry_date']} (ID {t['id']})": t
-                for t in open_trades
-            }
-            sel_edit_label = st.selectbox("Select trade to edit", list(edit_opts.keys()), key="edit_trade_sel")
-            et = edit_opts[sel_edit_label]
-            with st.form("form_edit_trade"):
-                e_dir = st.radio("Direction", ["Sell", "Buy"], horizontal=True,
-                                 index=0 if (et.get("direction") or "sell").lower() == "sell" else 1,
-                                 key="edit_dir")
-                e_type = st.selectbox("Option Type", ["call", "put"],
-                                      index=0 if et["trade_type"] == "call" else 1, key="edit_type")
-                e_strike = st.number_input("Strike Price (₹)", min_value=0.01, format="%.2f",
-                                           value=float(et["strike_price"]), key="edit_strike")
-                e_expiry = st.date_input("Expiry Date",
-                                         value=datetime.strptime(et["expiry_date"], "%Y-%m-%d").date(),
-                                         key="edit_expiry")
-                e_premium = st.number_input("Premium (₹)", min_value=0.01, format="%.2f",
-                                            value=float(et["premium_received"]), key="edit_premium")
-                e_qty = st.number_input("Lots", min_value=1, step=1,
-                                        value=int(et["quantity"]), key="edit_qty")
-                e_lot = st.number_input("Lot Size", min_value=1, step=1,
-                                        value=int(et["lot_size"]), key="edit_lot")
-                e_notes = st.text_input("Notes", value=et.get("notes", ""), key="edit_notes")
-                if st.form_submit_button("Save Changes"):
-                    db.update_trade(et["id"], e_strike, e_expiry, e_premium,
-                                    e_qty, e_lot, e_notes, e_dir, e_type)
-                    st.success("Trade updated.")
-                    st.rerun()
-
-        # ── Record Outcome (end of month) ─────────────────
-        st.divider()
         section_label("Record Outcome")
-        section_heading("Close positions at month end")
-        _render_html("""
-        <div style="background:#F9FAFB;border:1px solid #E5E7EB;border-left:3px solid #2563EB;
-                    border-radius:0 4px 4px 0;padding:12px 16px;margin-bottom:16px;">
-            <span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#6B7280;">
-                At month end, record what happened to each position:
-                <b>Expired worthless</b> (full premium kept) ·
-                <b>Bought back</b> (enter buyback price, P&amp;L = premium received − buyback cost) ·
-                <b>Exercised</b> (option was assigned against you)
-            </span>
-        </div>""")
+        with st.expander("Close positions at month end"):
+            _render_html("""
+            <div style="background:#F9FAFB;border:1px solid #E5E7EB;border-left:3px solid #2563EB;
+                        border-radius:0 4px 4px 0;padding:12px 16px;margin-bottom:16px;">
+                <span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#6B7280;">
+                    At month end, record what happened to each position:
+                    <b>Expired worthless</b> (full premium kept) ·
+                    <b>Bought back</b> (enter buyback price, P&amp;L = premium received − buyback cost) ·
+                    <b>Exercised</b> (option was assigned against you)
+                </span>
+            </div>""")
 
-        with st.form("form_close_trade"):
-            trade_map = {t["id"]: t for t in open_trades}
-            trade_opts = {
-                f"{t.get('direction','sell').upper()} {t['symbol']} {t['trade_type'].upper()} {t['strike_price']} exp {t['expiry_date']}": t["id"]
-                for t in open_trades
-            }
-            sel_label = st.selectbox("Select position", list(trade_opts.keys()))
-            sel_id = trade_opts[sel_label]
-            sel_trade = trade_map[sel_id]
-            direction = sel_trade.get("direction") or "sell"
+            with st.form("form_close_trade"):
+                trade_map = {t["id"]: t for t in open_trades}
+                trade_opts = {
+                    f"{t.get('direction','sell').upper()} {t['symbol']} {t['trade_type'].upper()} {t['strike_price']} exp {t['expiry_date']}": t["id"]
+                    for t in open_trades
+                }
+                sel_label = st.selectbox("Select position", list(trade_opts.keys()))
+                sel_id = trade_opts[sel_label]
+                sel_trade = trade_map[sel_id]
+                direction = sel_trade.get("direction") or "sell"
 
-            action = st.radio("Outcome", ["Expired worthless", "Closed / Bought back", "Exercised"], horizontal=True)
-            close_p = st.number_input("Close Price (₹)", min_value=0.0, format="%.2f",
-                                      help="Price at which position was closed") if action == "Closed / Bought back" else 0.0
-            close_d = st.date_input("Date", value=date.today())
+                action = st.radio("Outcome", ["Expired worthless", "Closed / Bought back", "Exercised"], horizontal=True)
+                close_p = st.number_input("Close Price (₹)", min_value=0.0, format="%.2f",
+                                          help="Price at which position was closed") if action == "Closed / Bought back" else 0.0
+                close_d = st.date_input("Date", value=date.today())
 
-            # Exercise portfolio impact preview
-            if action == "Exercised":
-                shares = sel_trade["quantity"] * sel_trade["lot_size"]
-                strike = sel_trade["strike_price"]
-                symbol = sel_trade["symbol"]
-                t_type = sel_trade["trade_type"]
+                # Exercise portfolio impact preview
+                if action == "Exercised":
+                    shares = sel_trade["quantity"] * sel_trade["lot_size"]
+                    strike = sel_trade["strike_price"]
+                    symbol = sel_trade["symbol"]
+                    t_type = sel_trade["trade_type"]
 
-                if direction == "sell" and t_type == "call":
-                    impact_msg = f"Shares called away: remove {shares} shares of {symbol} from portfolio (sold at ₹{strike})"
-                elif direction == "sell" and t_type == "put":
-                    impact_msg = f"Shares assigned: add {shares} shares of {symbol} to portfolio at ₹{strike}"
-                elif direction == "buy" and t_type == "call":
-                    impact_msg = f"You exercised: add {shares} shares of {symbol} to portfolio at ₹{strike}"
-                else:  # buy put
-                    impact_msg = f"You exercised: remove {shares} shares of {symbol} from portfolio (sold at ₹{strike})"
+                    if direction == "sell" and t_type == "call":
+                        impact_msg = f"Shares called away: remove {shares} shares of {symbol} from portfolio (sold at ₹{strike})"
+                    elif direction == "sell" and t_type == "put":
+                        impact_msg = f"Shares assigned: add {shares} shares of {symbol} to portfolio at ₹{strike}"
+                    elif direction == "buy" and t_type == "call":
+                        impact_msg = f"You exercised: add {shares} shares of {symbol} to portfolio at ₹{strike}"
+                    else:  # buy put
+                        impact_msg = f"You exercised: remove {shares} shares of {symbol} from portfolio (sold at ₹{strike})"
 
-                st.info(f"Portfolio impact: {impact_msg}")
-                auto_update = st.checkbox("Automatically update portfolio", value=True)
-            else:
-                auto_update = False
-
-            if st.form_submit_button("Record Outcome"):
-                if action == "Closed / Bought back":
-                    db.close_trade(sel_id, close_p, close_d)
-                elif action == "Expired worthless":
-                    db.close_trade(sel_id, 0.0, close_d)
-                    db.mark_trade_expired(sel_id)
+                    st.info(f"Portfolio impact: {impact_msg}")
+                    auto_update = st.checkbox("Automatically update portfolio", value=True)
                 else:
-                    db.mark_trade_exercised(sel_id)
-                    if auto_update:
-                        shares = sel_trade["quantity"] * sel_trade["lot_size"]
-                        strike = sel_trade["strike_price"]
-                        symbol = sel_trade["symbol"]
-                        t_type = sel_trade["trade_type"]
-                        # Determine whether to add or remove shares
-                        adding = (direction == "sell" and t_type == "put") or \
-                                 (direction == "buy" and t_type == "call")
-                        if adding:
-                            # Merge into existing holding at blended cost price
-                            holdings_cur = db.get_holdings()
-                            existing = next((x for x in holdings_cur if x["symbol"] == symbol), None)
-                            if existing:
-                                total_qty = existing["quantity"] + shares
-                                blended_cost = ((existing["cost_price"] * existing["quantity"]) + (strike * shares)) / total_qty
-                                db.update_holding(existing["id"], total_qty, round(blended_cost, 4), existing.get("notes", ""))
-                            else:
-                                db.add_holding(symbol, shares, strike, close_d,
-                                               notes=f"Assigned/exercised from options trade")
-                        else:
-                            # Remove shares — reduce or delete existing holding
-                            holdings = db.get_holdings()
-                            h = next((x for x in holdings if x["symbol"] == symbol), None)
-                            if h:
-                                new_qty = h["quantity"] - shares
-                                if new_qty <= 0:
-                                    db.delete_holding(h["id"])
+                    auto_update = False
+
+                if st.form_submit_button("Record Outcome"):
+                    if action == "Closed / Bought back":
+                        db.close_trade(sel_id, close_p, close_d)
+                    elif action == "Expired worthless":
+                        db.close_trade(sel_id, 0.0, close_d)
+                        db.mark_trade_expired(sel_id)
+                    else:
+                        db.mark_trade_exercised(sel_id)
+                        if auto_update:
+                            shares = sel_trade["quantity"] * sel_trade["lot_size"]
+                            strike = sel_trade["strike_price"]
+                            symbol = sel_trade["symbol"]
+                            t_type = sel_trade["trade_type"]
+                            # Determine whether to add or remove shares
+                            adding = (direction == "sell" and t_type == "put") or \
+                                     (direction == "buy" and t_type == "call")
+                            if adding:
+                                # Merge into existing holding at blended cost price
+                                holdings_cur = db.get_holdings()
+                                existing = next((x for x in holdings_cur if x["symbol"] == symbol), None)
+                                if existing:
+                                    total_qty = existing["quantity"] + shares
+                                    blended_cost = ((existing["cost_price"] * existing["quantity"]) + (strike * shares)) / total_qty
+                                    db.update_holding(existing["id"], total_qty, round(blended_cost, 4), existing.get("notes", ""))
                                 else:
-                                    db.update_holding(h["id"], new_qty, h["cost_price"], h.get("notes", ""))
-                                # Log as equity exit — sold at strike price
-                                exit_pnl = (strike - h["cost_price"]) * shares
-                                db.add_equity_trade(symbol, shares, h["cost_price"], strike,
-                                                    round(exit_pnl, 2), close_d,
-                                                    notes=f"Exercise: {direction} {t_type}")
+                                    db.add_holding(symbol, shares, strike, close_d,
+                                                   notes=f"Assigned/exercised from options trade")
+                            else:
+                                # Remove shares — reduce or delete existing holding
+                                holdings = db.get_holdings()
+                                h = next((x for x in holdings if x["symbol"] == symbol), None)
+                                if h:
+                                    new_qty = h["quantity"] - shares
+                                    if new_qty <= 0:
+                                        db.delete_holding(h["id"])
+                                    else:
+                                        db.update_holding(h["id"], new_qty, h["cost_price"], h.get("notes", ""))
+                                    # Log as equity exit — sold at strike price
+                                    exit_pnl = (strike - h["cost_price"]) * shares
+                                    db.add_equity_trade(symbol, shares, h["cost_price"], strike,
+                                                        round(exit_pnl, 2), close_d,
+                                                        notes=f"Exercise: {direction} {t_type}")
 
                 st.success("Outcome recorded.")
                 st.rerun()
-    else:
-        st.info("No open positions. Add a trade above.")
 
     # ── Trade History ─────────────────────────────────────
     if all_trades:
