@@ -227,6 +227,22 @@ def fmt_inr(amount):
     return f"₹{amount:,.0f}"
 
 
+def _fmt_prem(x):
+    try:
+        f = float(x)
+        return "—" if f != f else f"{f:.1f}"  # f != f is True only for NaN
+    except:
+        return "—"
+
+
+def _fmt_pct(x):
+    try:
+        f = float(x)
+        return "—" if f != f else f"{f:.1f}%"
+    except:
+        return "—"
+
+
 def pnl_color(val):
     """Return Atlas semantic color for a P&L value."""
     if isinstance(val, (int, float)):
@@ -247,7 +263,7 @@ def style_pnl_df(df, pnl_col="P&L (₹)", pct_col=None):
     styler = df.style
     cols = [c for c in [pnl_col, pct_col] if c and c in df.columns]
     for col in cols:
-        styler = styler.applymap(color_pnl, subset=[col])
+        styler = styler.map(color_pnl, subset=[col])
     return styler
 
 
@@ -333,12 +349,12 @@ with tab1:
             rows.append({
                 "Symbol": h["symbol"],
                 "Qty": h["quantity"],
-                "Cost Price (₹)": h["cost_price"],
-                "Current Price (₹)": cur_price or "—",
-                "Invested (₹)": round(cp_val, 2),
-                "Current Value (₹)": round(cur_val, 2) if cur_val else "—",
-                "P&L (₹)": round(pnl_amt, 2) if pnl_amt is not None else "—",
-                "P&L %": f"{pnl_pct:+.2f}%" if pnl_pct is not None else "—",
+                "Cost Price (₹)": round(h["cost_price"]),
+                "Current Price (₹)": round(cur_price) if cur_price else None,
+                "Invested (₹)": round(cp_val),
+                "Current Value (₹)": round(cur_val) if cur_val else None,
+                "P&L (₹)": round(pnl_amt) if pnl_amt is not None else None,
+                "P&L %": f"{pnl_pct:+.0f}%" if pnl_pct is not None else "—",
                 "Notes": h.get("notes", ""),
             })
 
@@ -349,7 +365,7 @@ with tab1:
             ("Total Invested", fmt_inr(total_invested), "#FFFFFF"),
             ("Current Value", fmt_inr(total_current), "#FFFFFF"),
             ("Unrealised P&L", fmt_inr(total_pnl), "#16A34A" if total_pnl >= 0 else "#DC2626"),
-            ("Return", f"{total_pnl_pct:+.2f}%", "#16A34A" if total_pnl_pct >= 0 else "#DC2626"),
+            ("Return", f"{total_pnl_pct:+.0f}%", "#16A34A" if total_pnl_pct >= 0 else "#DC2626"),
         ])
 
         df_display = pd.DataFrame(rows)
@@ -357,6 +373,13 @@ with tab1:
             style_pnl_df(df_display, "P&L (₹)", "P&L %"),
             use_container_width=True,
             hide_index=True,
+            column_config={
+                "Cost Price (₹)": st.column_config.NumberColumn(format="%.0f"),
+                "Current Price (₹)": st.column_config.NumberColumn(format="%.0f"),
+                "Invested (₹)": st.column_config.NumberColumn(format="%.0f"),
+                "Current Value (₹)": st.column_config.NumberColumn(format="%.0f"),
+                "P&L (₹)": st.column_config.NumberColumn(format="%.0f"),
+            },
         )
 
         with st.expander("📤 Record Exit / Sell"):
@@ -378,10 +401,10 @@ with tab1:
                     new_qty = sel_h["quantity"] - exit_qty
                     if new_qty <= 0:
                         db.delete_holding(sel_h["id"])
-                        st.success(f"Full exit recorded. P&L: {fmt_inr(pnl)} ({pnl_pct:+.2f}%)")
+                        st.success(f"Full exit recorded. P&L: {fmt_inr(pnl)} ({pnl_pct:+.0f}%)")
                     else:
                         db.update_holding(sel_h["id"], new_qty, sel_h["cost_price"], sel_h.get("notes", ""))
-                        st.success(f"Partial exit recorded. Sold {exit_qty} shares, {new_qty} remain. P&L: {fmt_inr(pnl)} ({pnl_pct:+.2f}%)")
+                        st.success(f"Partial exit recorded. Sold {exit_qty} shares, {new_qty} remain. P&L: {fmt_inr(pnl)} ({pnl_pct:+.0f}%)")
                     st.rerun()
 
         with st.expander("🗑️ Delete a Holding"):
@@ -413,13 +436,17 @@ with tab1:
                 opp_rows.append({
                     "Symbol": h["symbol"],
                     "Qty Held": h["quantity"],
-                    "Cost Price (₹)": h["cost_price"],
-                    "Current Price (₹)": cur_price or "—",
+                    "Cost Price (₹)": round(h["cost_price"]),
+                    "Current Price (₹)": round(cur_price) if cur_price else None,
                     "Lot Size": lot,
                     "Notes": h.get("notes", ""),
                 })
             st.warning(f"⚡ {len(opportunities)} stock(s) with no call sold this month")
-            st.dataframe(pd.DataFrame(opp_rows), use_container_width=True, hide_index=True)
+            st.dataframe(pd.DataFrame(opp_rows), use_container_width=True, hide_index=True,
+                         column_config={
+                             "Cost Price (₹)": st.column_config.NumberColumn(format="%.0f"),
+                             "Current Price (₹)": st.column_config.NumberColumn(format="%.0f"),
+                         })
         else:
             st.success("All holdings have a call sold for this month.")
     else:
@@ -489,17 +516,23 @@ with tab1:
                 "Symbol": t["symbol"],
                 "Direction": direction.upper(),
                 "Type": t["trade_type"].upper(),
-                "Strike (₹)": t["strike_price"],
+                "Strike (₹)": round(t["strike_price"]),
                 "Expiry": t["expiry_date"],
                 "Days Left": days_left,
-                premium_col: t["premium_received"],
+                premium_col: round(t["premium_received"], 1),
                 "Lots": t["quantity"],
                 "Lot Size": t["lot_size"],
-                "Total (₹)": round(premium_total, 2),
+                "Total (₹)": round(premium_total),
                 "Trade Date": t["trade_date"],
                 "Notes": t.get("notes", ""),
             })
-        st.dataframe(pd.DataFrame(open_rows), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(open_rows), use_container_width=True, hide_index=True,
+                     column_config={
+                         "Strike (₹)": st.column_config.NumberColumn(format="%.0f"),
+                         "Premium Recv (₹)": st.column_config.NumberColumn(format="%.1f"),
+                         "Premium Paid (₹)": st.column_config.NumberColumn(format="%.1f"),
+                         "Total (₹)": st.column_config.NumberColumn(format="%.0f"),
+                     })
 
         # ── Record Outcome (end of month) ─────────────────
         st.divider()
@@ -632,19 +665,26 @@ with tab1:
                         "Symbol": t["symbol"],
                         "Direction": (t.get("direction") or "sell").upper(),
                         "Type": t["trade_type"].upper(),
-                        "Strike (₹)": t["strike_price"],
+                        "Strike (₹)": round(t["strike_price"]),
                         "Expiry": t["expiry_date"],
-                        "Premium (₹)": t["premium_received"],
-                        "Total Premium (₹)": round(premium_total, 2),
+                        "Premium (₹)": round(t["premium_received"], 1),
+                        "Total Premium (₹)": round(premium_total),
                         "Outcome": t["status"].capitalize(),
-                        "Close Price (₹)": t.get("close_price") or "—",
-                        "Realised P&L (₹)": pnl,
+                        "Close Price (₹)": round(t.get("close_price"), 1) if t.get("close_price") else None,
+                        "Realised P&L (₹)": round(pnl),
                         "Close Date": t.get("close_date") or "—",
                     })
 
                 st.dataframe(
                     style_pnl_df(pd.DataFrame(hist_rows), "Realised P&L (₹)"),
                     use_container_width=True, hide_index=True,
+                    column_config={
+                        "Strike (₹)": st.column_config.NumberColumn(format="%.0f"),
+                        "Premium (₹)": st.column_config.NumberColumn(format="%.1f"),
+                        "Total Premium (₹)": st.column_config.NumberColumn(format="%.0f"),
+                        "Close Price (₹)": st.column_config.NumberColumn(format="%.1f"),
+                        "Realised P&L (₹)": st.column_config.NumberColumn(format="%.0f"),
+                    },
                 )
             else:
                 st.info("No closed trades yet.")
@@ -748,12 +788,12 @@ with tab2:
             risk_rows.append({
                 "Symbol": t["symbol"],
                 "Type": t["trade_type"].upper(),
-                "Strike (₹)": t["strike_price"],
-                "Spot (₹)": spot or "—",
-                "Distance %": f"{dist_pct:.2f}%" if dist_pct is not None else "—",
-                "Current Premium (₹)": cur_premium or "—",
-                "P&L (₹)": pnl_amt,
-                "P&L %": f"{pnl_pct:+.1f}%",
+                "Strike (₹)": round(t["strike_price"]),
+                "Spot (₹)": round(spot) if spot else None,
+                "Distance %": f"{dist_pct:.0f}%" if dist_pct is not None else "—",
+                "Current Premium (₹)": round(cur_premium, 1) if cur_premium else None,
+                "P&L (₹)": round(pnl_amt),
+                "P&L %": f"{pnl_pct:+.0f}%",
                 "Expiry": t["expiry_date"],
                 "Days Left": days_left,
                 "Risk": ", ".join(risk_flag) if risk_flag else "OK",
@@ -784,6 +824,12 @@ with tab2:
             style_pnl_df(df_risk, "P&L (₹)", "P&L %").apply(highlight_risk, axis=1),
             use_container_width=True,
             hide_index=True,
+            column_config={
+                "Strike (₹)": st.column_config.NumberColumn(format="%.0f"),
+                "Spot (₹)": st.column_config.NumberColumn(format="%.0f"),
+                "Current Premium (₹)": st.column_config.NumberColumn(format="%.1f"),
+                "P&L (₹)": st.column_config.NumberColumn(format="%.0f"),
+            },
         )
 
         if at_risk_list:
@@ -858,11 +904,7 @@ with tab3:
         wl_results = st.session_state.get("wl_data", [])
         if wl_results:
             df_wl = pd.DataFrame(wl_results).sort_values("Call %", ascending=False)
-            st.dataframe(style_pnl_df(df_wl), use_container_width=True, hide_index=True,
-                         column_config={
-                             "Call %": st.column_config.NumberColumn(format="%.2f%%"),
-                             "Put %": st.column_config.NumberColumn(format="%.2f%%"),
-                         })
+            st.dataframe(df_wl, use_container_width=True, hide_index=True)
         else:
             st.warning("No data returned. Connect Upstox or check market hours.")
 
@@ -921,15 +963,11 @@ with tab3:
                 hero_bar([
                     ("Stocks Scanned", str(total), "#FFFFFF"),
                     ("Results Shown", str(len(df_screen)), "#FFFFFF"),
-                    ("Top Call %", f"{top_call:.2f}%", "#16A34A"),
-                    ("Top Put %", f"{top_put:.2f}%", "#16A34A"),
+                    ("Top Call %", f"{top_call:.1f}%", "#16A34A"),
+                    ("Top Put %", f"{top_put:.1f}%", "#16A34A"),
                 ])
 
-                st.dataframe(style_pnl_df(df_screen), use_container_width=True, hide_index=True,
-                             column_config={
-                                 "Call %": st.column_config.NumberColumn(format="%.2f%%"),
-                                 "Put %": st.column_config.NumberColumn(format="%.2f%%"),
-                             })
+                st.dataframe(df_screen, use_container_width=True, hide_index=True)
 
                 add_wl_sym = st.selectbox("Add to watchlist from results",
                                           ["—"] + df_screen["Symbol"].tolist())
@@ -1034,16 +1072,21 @@ with tab4:
         eq_rows = [{
             "Symbol": t["symbol"],
             "Qty": t["quantity"],
-            "Buy Price (₹)": t["buy_price"],
-            "Sell Price (₹)": t["sell_price"],
-            "P&L (₹)": t["pnl"],
-            "P&L %": f"{(t['pnl'] / (t['buy_price'] * t['quantity']) * 100):+.2f}%" if t["buy_price"] and t["quantity"] else "—",
+            "Buy Price (₹)": round(t["buy_price"]),
+            "Sell Price (₹)": round(t["sell_price"]),
+            "P&L (₹)": round(t["pnl"]),
+            "P&L %": f"{(t['pnl'] / (t['buy_price'] * t['quantity']) * 100):+.0f}%" if t["buy_price"] and t["quantity"] else "—",
             "Date": t["trade_date"],
             "Notes": t.get("notes", ""),
         } for t in equity_trades]
         st.dataframe(
             style_pnl_df(pd.DataFrame(eq_rows), "P&L (₹)", "P&L %"),
             use_container_width=True, hide_index=True,
+            column_config={
+                "Buy Price (₹)": st.column_config.NumberColumn(format="%.0f"),
+                "Sell Price (₹)": st.column_config.NumberColumn(format="%.0f"),
+                "P&L (₹)": st.column_config.NumberColumn(format="%.0f"),
+            },
         )
     else:
         st.info("No equity exits recorded yet. Use 'Record Exit / Sell' in the Portfolio tab.")
