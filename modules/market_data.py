@@ -39,7 +39,16 @@ def _get_nse_session():
     if _nse_session is None or (now - (_session_created_at or 0)) > SESSION_TTL_SECONDS:
         session = requests.Session()
         try:
+            # Step 1: hit homepage to get initial cookies
             session.get("https://www.nseindia.com", headers=NSE_HEADERS, timeout=10)
+            time.sleep(1)
+            # Step 2: hit the option chain page to set remaining cookies
+            session.get(
+                "https://www.nseindia.com/option-chain",
+                headers={**NSE_HEADERS, "Referer": "https://www.nseindia.com"},
+                timeout=10,
+            )
+            time.sleep(0.5)
             _nse_session = session
             _session_created_at = now
         except Exception:
@@ -97,9 +106,12 @@ def get_option_chain(symbol):
         return None
     try:
         url = f"https://www.nseindia.com/api/option-chain-equities?symbol={symbol.upper()}"
-        resp = session.get(url, headers=NSE_HEADERS, timeout=10)
+        headers = {**NSE_HEADERS, "Referer": "https://www.nseindia.com/option-chain"}
+        resp = session.get(url, headers=headers, timeout=10)
         if resp.status_code == 200:
-            return resp.json()
+            data = resp.json()
+            if data:  # NSE sometimes returns empty {} — treat as failure
+                return data
     except Exception:
         pass
     return None

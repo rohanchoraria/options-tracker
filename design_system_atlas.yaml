@@ -1,0 +1,437 @@
+# =============================================================================
+# Options Tracker — Design System "Atlas"
+# =============================================================================
+#
+# Use by referencing this file explicitly:
+# "use the Atlas design system" or "use design_system_atlas.yaml"
+#
+# Design philosophy: "Mono"
+#   - Data IS the design. Numbers rendered in monospace ARE the visual anchor.
+#   - A trader doesn't read magazines. They scan positions and P&L. Numbers
+#     should feel like a Bloomberg terminal married to modern clarity.
+#   - Stripe: modern precision. Clean whites, generous whitespace.
+#   - FT: editorial authority in headlines only (via geometric sans, not serif).
+#
+# Inspiration: Bloomberg Terminal + Stripe + modern data-native interfaces
+#
+# What makes this different from a generic design system:
+#   - Cool palette (grey/blue accent)
+#   - Geometric sans (Space Grotesk) + monospace (JetBrains Mono) pairing
+#   - Pure white canvas
+#   - Blue accent — professional, doesn't compete with P&L green/red
+#   - Data-native, monospace-heavy feel
+#
+# =============================================================================
+
+
+# -----------------------------------------------------------------------------
+# COLOR PALETTE
+# -----------------------------------------------------------------------------
+# Clean, precise, modern. Built on neutral greys with blue as the primary
+# accent — professional and universally readable. Semantic colors (green,
+# red, amber) carry all the directional meaning for P&L and risk.
+# -----------------------------------------------------------------------------
+
+colors:
+
+  core:
+    background:
+      hex: "#FFFFFF"
+      name: "White"
+      use: "Page/app background. Pure white — crisp and modern."
+
+    surface:
+      hex: "#F9FAFB"
+      name: "Grey 50"
+      use: "Cards, callout boxes, table headers, section fills."
+
+    surface_2:
+      hex: "#F3F4F6"
+      name: "Grey 100"
+      use: "Secondary surface. Nested cards, alternating table rows."
+
+    text_primary:
+      hex: "#111827"
+      name: "Ink"
+      use: "Headlines, body text, primary labels. Near-black."
+
+    text_secondary:
+      hex: "#6B7280"
+      name: "Grey 500"
+      use: "Captions, supporting text, axis labels, metadata."
+
+    text_tertiary:
+      hex: "#9CA3AF"
+      name: "Grey 400"
+      use: "Placeholder text, disabled states, lowest-emphasis labels."
+
+    accent:
+      hex: "#2563EB"
+      name: "Blue"
+      use: >
+        Primary emphasis. Active tab indicators, callout borders,
+        interactive elements, hyperlinks, primary chart series.
+        Professional and neutral — doesn't compete with P&L colors.
+
+  semantic:
+    positive:
+      hex: "#16A34A"
+      name: "Green"
+      use: "Profit / up / safe / above strike (for puts). P&L positive."
+
+    negative:
+      hex: "#DC2626"
+      name: "Red"
+      use: "Loss / down / at risk / near strike. P&L negative."
+
+    neutral:
+      hex: "#9CA3AF"
+      name: "Grey 400"
+      use: "Flat / unchanged / no delta. Open positions with no risk flag."
+
+    info:
+      hex: "#2563EB"
+      name: "Blue"
+      use: "Informational callouts, hyperlinks, non-directional highlights."
+
+    warning:
+      hex: "#D97706"
+      name: "Amber"
+      use: "Caution — position approaching strike, expiry near, watch list."
+
+  # Chart data series — designed for high contrast on white backgrounds.
+  chart_series:
+    - label: "series_1"
+      hex: "#2563EB"    # blue
+    - label: "series_2"
+      hex: "#16A34A"    # green
+    - label: "series_3"
+      hex: "#D97706"    # amber
+    - label: "series_4"
+      hex: "#DC2626"    # red
+    - label: "series_5"
+      hex: "#7C3AED"    # violet
+    - label: "series_6"
+      hex: "#9CA3AF"    # grey — always last, for "other"
+
+  utility:
+    gridline: "#E5E7EB"        # Grey 200
+    divider: "#D1D5DB"         # Grey 300
+    border_subtle: "#E5E7EB"   # Grey 200
+    hero_bar: "#111827"        # Ink — dark hero bars for key metrics
+
+  dark_theme:
+    background: "#111827"      # Ink
+    surface: "#1F2937"         # Grey 800
+    border: "#374151"          # Grey 700
+    text_primary: "#FFFFFF"
+    text_secondary: "#6B7280"
+
+
+# -----------------------------------------------------------------------------
+# TYPOGRAPHY
+# -----------------------------------------------------------------------------
+# Geometric sans (Space Grotesk) for headlines creates technical authority.
+# JetBrains Mono is the signature — used prominently for ALL data, metrics,
+# strikes, premiums, P&L numbers. This monospace-heavy approach IS the design.
+# Inter for body text ensures readability.
+# -----------------------------------------------------------------------------
+
+typography:
+
+  fonts:
+    heading:
+      family: "Space Grotesk"
+      fallback: "'Inter', 'Helvetica Neue', sans-serif"
+      note: >
+        Geometric sans-serif with personality. The tight letter-spacing
+        and distinctive character give headlines a technical, modern
+        feel — fitting for a trading tool.
+    body:
+      family: "Inter"
+      fallback: "'Helvetica Neue', Arial, sans-serif"
+      note: "Clean, readable, invisible. Stays out of the way of the data."
+    mono:
+      family: "JetBrains Mono"
+      fallback: "'SF Mono', Menlo, monospace"
+      use: >
+        THE signature font. Used for: strike prices, premiums, P&L values,
+        portfolio totals, lot sizes, expiry dates, timestamps, table cells.
+        Data rendered in monospace IS the visual anchor of this system.
+
+  scale:
+    h1:
+      size: "28-32px"
+      weight: 700
+      letter_spacing: "-0.03em"
+      font: "heading"
+      use: "Page titles, app header."
+
+    h2:
+      size: "20-22px"
+      weight: 600
+      letter_spacing: "-0.02em"
+      font: "heading"
+      use: "Section headers — Portfolio, Risk Monitor, Screener."
+
+    h3:
+      size: "18px"
+      weight: 600
+      letter_spacing: "-0.01em"
+      font: "heading"
+      use: "Subsections, chart titles."
+
+    h4:
+      size: "11px"
+      weight: 500
+      letter_spacing: "0.08em"
+      text_transform: "uppercase"
+      font: "mono"
+      use: >
+        Section labels, table column headers, category markers.
+        Monospace + uppercase + wide letter-spacing creates the
+        terminal-like category marker that defines the Atlas look.
+
+    body:
+      size: "15px"
+      weight: 400
+      line_height: 1.6
+      font: "body"
+      use: "Explanatory text, form labels, notes."
+
+    caption:
+      size: "12-13px"
+      weight: 400
+      color: "text_secondary"
+      font: "mono"
+      use: "Timestamps, expiry dates, metadata. Always mono."
+
+    data:
+      size: "13px"
+      font: "mono"
+      weight: 500
+      use: "Table cells — strikes, premiums, P&L, lot sizes. The workhorse."
+
+    hero_metric:
+      size: "36px"
+      font: "mono"
+      weight: 700
+      letter_spacing: "-0.02em"
+      use: "Large portfolio totals and P&L in dark hero bars."
+
+
+# -----------------------------------------------------------------------------
+# CHART STYLE
+# -----------------------------------------------------------------------------
+# Claim titles in Space Grotesk. Data labels in JetBrains Mono.
+# Semantic green/red for P&L direction. Blue for neutral data.
+# Clean and data-dense.
+# -----------------------------------------------------------------------------
+
+charts:
+
+  title:
+    alignment: "left"
+    style: "h3"
+    font: "heading"
+    rule: >
+      Always a claim in Space Grotesk. Insight titles, not labels.
+      Bad: "Monthly P&L"
+      Good: "Premium income has grown 3 months in a row"
+
+  subtitle:
+    alignment: "left"
+    style: "caption"
+    font: "mono"
+    rule: "Time period, units, comparison basis. Mono, muted."
+
+  gridlines:
+    horizontal: true
+    vertical: false
+    color: "#E5E7EB"
+    stroke: "1px"
+    style: "solid"
+
+  axes:
+    y_axis_labels: "left"
+    x_axis_labels: "bottom"
+    axis_lines: false
+    label_style: "caption"
+
+  colors:
+    directional_data: "Use semantic colors (green/red) for P&L, profit/loss."
+    categorical_data: "Use chart_series in order. Blue first."
+    single_series: "Use blue (#2563EB) for single series."
+    highlight: "Blue for focal; grey (#9CA3AF) for context."
+
+  labels:
+    prefer_direct: true
+    font: "mono"
+    rule: "Direct-label in JetBrains Mono. Always."
+
+  legend:
+    position: "top-left"
+    layout: "horizontal"
+    border: false
+    font: "mono"
+
+  bar_charts:
+    corner_radius: "3px"
+    gap_ratio: 0.35
+    rule: "Solid fill, no borders, no gradients."
+
+  line_charts:
+    stroke_weight: "2px"
+    data_points: "Show dots only if fewer than 8 data points."
+
+  annotations:
+    line_color: "#2563EB"
+    line_style: "dashed"
+    label_style: "caption"
+    rule: "Dashed blue annotation lines. Max 2 per chart."
+
+  no_chartjunk:
+    - "No 3D effects"
+    - "No gradients"
+    - "No unnecessary borders"
+    - "No background fills on plot area"
+    - "No drop shadows"
+    - "No decorative elements"
+
+
+# -----------------------------------------------------------------------------
+# SIGNATURE ELEMENTS
+# -----------------------------------------------------------------------------
+# These define the Atlas "Mono" look:
+# -----------------------------------------------------------------------------
+
+signature:
+
+  hero_bar:
+    description: >
+      Dark ink bar (#111827) containing 2-4 key metrics in large
+      JetBrains Mono. Used at the top of the portfolio dashboard.
+      Shows: Total Invested, Current Value, Unrealised P&L, Monthly Premium.
+    background: "#111827"
+    text_color: "#FFFFFF"
+    metric_font: "mono"
+    metric_size: "36px"
+    label_font: "mono"
+    label_size: "10px"
+    label_tracking: "0.1em"
+    label_transform: "uppercase"
+    label_color: "rgba(255,255,255,0.5)"
+    border_radius: "6px"
+    padding: "28px"
+
+  section_label:
+    description: >
+      Monospace uppercase label above each section. The terminal-like
+      marker that anchors the visual hierarchy.
+    font: "mono"
+    size: "11px"
+    weight: 500
+    letter_spacing: "0.08em"
+    text_transform: "uppercase"
+    color: "#9CA3AF"
+
+  tab_bar:
+    description: "Fixed navigation bar with Space Grotesk labels."
+    background: "#FFFFFF"
+    border_bottom: "1px solid #E5E7EB"
+    active_color: "#2563EB"
+    active_indicator: "2px bottom border in blue"
+
+  callout_box:
+    background: "#F9FAFB"
+    border: "1px solid #E5E7EB"
+    left_accent: "3px solid #2563EB"
+    border_radius: "0 4px 4px 0"
+    padding: "12px 16px"
+
+  table_header:
+    font: "mono"
+    size: "11px"
+    weight: 600
+    letter_spacing: "0.04em"
+    text_transform: "uppercase"
+    background: "#F9FAFB"
+    border_bottom: "2px solid #E5E7EB"
+
+  risk_indicators:
+    description: >
+      Color coding for positions in the Risk Monitor tab.
+    safe: "#16A34A"       # green — position is safe
+    warning: "#D97706"    # amber — expiry near
+    at_risk: "#DC2626"    # red — spot near strike
+    row_highlight_risk: "background-color: #FEF2F2"    # light red row
+    row_highlight_warning: "background-color: #FFFBEB"  # light amber row
+
+
+# -----------------------------------------------------------------------------
+# USAGE RULES
+# -----------------------------------------------------------------------------
+
+rules:
+
+  - id: "mono_is_the_design"
+    rule: >
+      JetBrains Mono is the visual signature. ALL numbers must use it —
+      strike prices, premiums received, P&L amounts, portfolio totals,
+      lot sizes, expiry dates, spot prices, distance percentages.
+      The monospace rendering IS the design — trading data shouldn't need
+      decoration when the typography does the work.
+
+  - id: "grotesk_for_headlines"
+    rule: >
+      Space Grotesk for headlines and section titles. Its geometric
+      character pairs with monospace data without competing.
+
+  - id: "claim_not_label"
+    rule: >
+      Every chart and section title makes a claim, not a label.
+      Bad: "Monthly P&L"
+      Good: "Premium income has grown 3 months in a row"
+      Bad: "Risk Monitor"
+      Good: "2 positions are within 2% of their strike"
+
+  - id: "blue_is_neutral"
+    rule: >
+      Blue (#2563EB) is the accent and default data color.
+      It's intentionally non-directional. Use green/red only when
+      encoding P&L direction (profit/loss). Blue for everything else.
+
+  - id: "dark_hero_for_impact"
+    rule: >
+      Dark ink hero bars (#111827) with large white mono metrics
+      create the strongest visual statement. Use at the top of the
+      portfolio tab. Max 3-4 metrics: Invested, Value, P&L, Monthly Premium.
+
+  - id: "uppercase_mono_labels"
+    rule: >
+      Section labels and table headers: JetBrains Mono, uppercase,
+      wide letter-spacing (0.04-0.08em). Terminal-like hierarchy
+      without visual weight.
+
+  - id: "semantic_colors_pnl"
+    rule: >
+      Green = profit / safe / position OK.
+      Red = loss / at risk / near strike.
+      Amber = warning / expiry near / watch.
+      Never use these decoratively.
+
+  - id: "when_in_doubt_remove"
+    rule: "If an element doesn't add meaning, it adds noise. Remove it."
+
+
+# =============================================================================
+# END OF DESIGN SYSTEM — ATLAS (Mono)
+# =============================================================================
+# Version: 2.1
+# Created: 2026-03-23
+# Updated: 2026-04-11 — adapted from SaaS context to Options Tracker
+# Maintainer: Rohan
+#
+# To use: tell Claude "use the Atlas design system" or
+# "use design_system_atlas.yaml" when requesting visual outputs.
+# =============================================================================

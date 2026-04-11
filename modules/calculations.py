@@ -10,16 +10,30 @@ def holding_pnl(cost_price, current_price, quantity):
     return round(pnl, 2), round(pnl_pct, 2)
 
 
-def trade_pnl(premium_received, current_premium, quantity, lot_size):
+def trade_pnl(premium, close_or_current_premium, quantity, lot_size, direction="sell"):
     """
-    For short options: profit = premium received - current premium (cost to close).
+    Calculate P&L for an options trade.
+
+    Sell (short): profit = premium received - current/close premium
+      - Expires worthless (close=0) → max profit = full premium
+      - Bought back at close price → profit = received - buyback cost
+
+    Buy (long): profit = current/close premium - premium paid
+      - Rises in value → profit
+      - Falls to zero → full loss
+
     Returns (pnl_amount, pnl_pct).
-    current_premium=0 means expired worthless (max profit).
     """
-    received = premium_received * quantity * lot_size
-    cost_to_close = (current_premium or 0) * quantity * lot_size
-    pnl = received - cost_to_close
-    pnl_pct = (pnl / received * 100) if received > 0 else 0.0
+    total_premium = premium * quantity * lot_size
+    close_total = (close_or_current_premium or 0) * quantity * lot_size
+
+    if direction == "buy":
+        pnl = close_total - total_premium
+        pnl_pct = (pnl / total_premium * 100) if total_premium > 0 else 0.0
+    else:  # sell (default)
+        pnl = total_premium - close_total
+        pnl_pct = (pnl / total_premium * 100) if total_premium > 0 else 0.0
+
     return round(pnl, 2), round(pnl_pct, 2)
 
 
@@ -86,7 +100,8 @@ def monthly_summary(trades):
 
         if t["status"] in ("closed", "expired"):
             close_p = t.get("close_price") or 0
-            pnl, _ = trade_pnl(t["premium_received"], close_p, t["quantity"], t["lot_size"])
+            pnl, _ = trade_pnl(t["premium_received"], close_p, t["quantity"], t["lot_size"],
+                                direction=t.get("direction", "sell"))
             summary[key]["realised_pnl"] += pnl
         elif t["status"] == "open":
             pass  # unrealised
