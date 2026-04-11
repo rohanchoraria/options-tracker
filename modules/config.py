@@ -25,7 +25,7 @@ def _load():
     # Fall back to Streamlit secrets (when deployed)
     try:
         import streamlit as st
-        _secrets = dict(st.secrets)
+        _secrets = {k: st.secrets[k] for k in st.secrets}
     except Exception:
         _secrets = {}
 
