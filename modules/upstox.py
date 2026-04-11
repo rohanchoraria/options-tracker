@@ -9,7 +9,7 @@ import requests
 from modules.config import get
 
 UPSTOX_BASE = "https://api.upstox.com/v2"
-REDIRECT_URI = "http://127.0.0.1:8501"
+REDIRECT_URI = "https://options-tracking-nse.streamlit.app/"
 
 # ── Instrument Keys ───────────────────────────────────────
 # NSE F&O symbol → Upstox instrument key (NSE_EQ|ISIN format)
