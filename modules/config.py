@@ -30,6 +30,8 @@ def _load():
         import streamlit as _st
         _st.write("DEBUG secrets keys:", list(_secrets.keys()))
         _st.write("DEBUG SUPABASE_KEY prefix:", _secrets.get("SUPABASE_KEY", "NOT FOUND")[:20])
+        _st.write("DEBUG SUPABASE_URL:", _secrets.get("SUPABASE_URL", "NOT FOUND"))
+        _st.write("DEBUG KEY length:", len(_secrets.get("SUPABASE_KEY", "")))
     except Exception as e:
         _secrets = {}
         import streamlit as _st
