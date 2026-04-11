@@ -235,17 +235,23 @@ def pnl_color(val):
 
 
 def style_pnl_df(df, pnl_col="P&L (₹)", pct_col=None):
-    """Apply green/red coloring to P&L columns in a dataframe styler."""
+    """Apply green/red coloring to P&L columns and center-align all but the first column."""
     def color_val(val):
         try:
             v = float(str(val).replace("₹", "").replace(",", "").replace("%", ""))
             color = "#16A34A" if v >= 0 else "#DC2626"
-            return f"color:{color};font-family:'JetBrains Mono',monospace;font-weight:600;"
+            return f"color:{color};font-family:'JetBrains Mono',monospace;font-weight:600;text-align:center;"
         except Exception:
             return ""
 
-    cols = [c for c in [pnl_col, pct_col] if c and c in df.columns]
     styler = df.style
+    # Center-align all columns except the first
+    if len(df.columns) > 1:
+        styler = styler.set_properties(subset=list(df.columns[1:]), **{"text-align": "center"})
+    # Left-align the first column
+    styler = styler.set_properties(subset=[df.columns[0]], **{"text-align": "left"})
+    # P&L coloring
+    cols = [c for c in [pnl_col, pct_col] if c and c in df.columns]
     for col in cols:
         styler = styler.applymap(color_val, subset=[col])
     return styler
@@ -873,7 +879,7 @@ with tab3:
     run_screener = sc4.button("🔄 Scan All F&O Stocks", use_container_width=True)
 
     if run_screener:
-        fo_stocks = market.get_fo_stocks()
+        fo_stocks = sorted(upstox.INSTRUMENT_KEYS.keys())
 
         if fo_stocks:
             results = []
