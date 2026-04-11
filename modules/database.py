@@ -137,6 +137,19 @@ def mark_trade_expired(trade_id):
     _patch("trades", {"id": trade_id}, {"status": "expired"})
 
 
+def update_trade(trade_id, strike_price, expiry_date, premium_received, quantity, lot_size, notes, direction, trade_type):
+    _patch("trades", {"id": trade_id}, {
+        "strike_price": strike_price,
+        "expiry_date": str(expiry_date),
+        "premium_received": premium_received,
+        "quantity": quantity,
+        "lot_size": lot_size,
+        "notes": notes,
+        "direction": direction.lower(),
+        "trade_type": trade_type.lower(),
+    })
+
+
 def delete_trade(trade_id):
     _delete("trades", {"id": trade_id})
 

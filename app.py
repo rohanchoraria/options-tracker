@@ -463,7 +463,8 @@ with tab1:
     with col_t1:
         with st.expander("➕ Add Trade"):
             with st.form("form_add_trade"):
-                t_sym = st.text_input("Symbol").strip().upper()
+                known_syms = sorted(upstox.INSTRUMENT_KEYS.keys())
+                t_sym = st.selectbox("Symbol", [""] + known_syms, key="add_trade_sym")
                 t_dir = st.radio("Direction", ["Sell", "Buy"], horizontal=True,
                                  help="Sell = write/short the option. Buy = long the option.")
                 t_type = st.selectbox("Option Type", ["call", "put"])
@@ -533,6 +534,38 @@ with tab1:
                          "Premium Paid (₹)": st.column_config.NumberColumn(format="%.1f"),
                          "Total (₹)": st.column_config.NumberColumn(format="%.0f"),
                      })
+
+        # ── Edit Trade ────────────────────────────────────
+        with st.expander("✏️ Edit a Trade"):
+            edit_opts = {
+                f"{t.get('direction','sell').upper()} {t['symbol']} {t['trade_type'].upper()} {t['strike_price']} exp {t['expiry_date']} (ID {t['id']})": t
+                for t in open_trades
+            }
+            sel_edit_label = st.selectbox("Select trade to edit", list(edit_opts.keys()), key="edit_trade_sel")
+            et = edit_opts[sel_edit_label]
+            with st.form("form_edit_trade"):
+                e_dir = st.radio("Direction", ["Sell", "Buy"], horizontal=True,
+                                 index=0 if (et.get("direction") or "sell").lower() == "sell" else 1,
+                                 key="edit_dir")
+                e_type = st.selectbox("Option Type", ["call", "put"],
+                                      index=0 if et["trade_type"] == "call" else 1, key="edit_type")
+                e_strike = st.number_input("Strike Price (₹)", min_value=0.01, format="%.2f",
+                                           value=float(et["strike_price"]), key="edit_strike")
+                e_expiry = st.date_input("Expiry Date",
+                                         value=datetime.strptime(et["expiry_date"], "%Y-%m-%d").date(),
+                                         key="edit_expiry")
+                e_premium = st.number_input("Premium (₹)", min_value=0.01, format="%.2f",
+                                            value=float(et["premium_received"]), key="edit_premium")
+                e_qty = st.number_input("Lots", min_value=1, step=1,
+                                        value=int(et["quantity"]), key="edit_qty")
+                e_lot = st.number_input("Lot Size", min_value=1, step=1,
+                                        value=int(et["lot_size"]), key="edit_lot")
+                e_notes = st.text_input("Notes", value=et.get("notes", ""), key="edit_notes")
+                if st.form_submit_button("Save Changes"):
+                    db.update_trade(et["id"], e_strike, e_expiry, e_premium,
+                                    e_qty, e_lot, e_notes, e_dir, e_type)
+                    st.success("Trade updated.")
+                    st.rerun()
 
         # ── Record Outcome (end of month) ─────────────────
         st.divider()
