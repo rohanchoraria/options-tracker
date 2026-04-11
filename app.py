@@ -336,6 +336,8 @@ with tab1:
 
     if holdings:
         symbols = [h["symbol"] for h in holdings]
+        if st.button("🔄 Refresh Prices", key="refresh_prices"):
+            _fetch_prices.clear()
         with st.spinner("Fetching live prices..."):
             prices = _fetch_prices(tuple(sorted(symbols)))
 
