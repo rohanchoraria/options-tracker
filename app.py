@@ -175,6 +175,9 @@ input, select, textarea {
     font-size: 12px !important;
     color: #9CA3AF !important;
 }
+
+/* Hide "Press Enter to submit form" hint */
+[data-testid="InputInstructions"] { display: none !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -405,6 +408,19 @@ with tab1:
                     else:
                         db.update_holding(sel_h["id"], new_qty, sel_h["cost_price"], sel_h.get("notes", ""))
                         st.success(f"Partial exit recorded. Sold {exit_qty} shares, {new_qty} remain. P&L: {fmt_inr(pnl)} ({pnl_pct:+.0f}%)")
+                    st.rerun()
+
+        with st.expander("✏️ Edit a Holding"):
+            holding_options_edit = {f"{h['symbol']} — {h['quantity']} shares @ ₹{h['cost_price']}": h for h in holdings}
+            sel_edit_h_label = st.selectbox("Select holding to edit", list(holding_options_edit.keys()), key="edit_holding_sel")
+            eh = holding_options_edit[sel_edit_h_label]
+            with st.form("form_edit_holding"):
+                e_qty = st.number_input("Quantity", min_value=1, step=1, value=int(eh["quantity"]))
+                e_cp = st.number_input("Cost Price (₹)", min_value=0.01, format="%.2f", value=float(eh["cost_price"]))
+                e_notes = st.text_input("Notes", value=eh.get("notes", ""))
+                if st.form_submit_button("Save Changes"):
+                    db.update_holding(eh["id"], e_qty, e_cp, e_notes)
+                    st.success(f"{eh['symbol']} updated.")
                     st.rerun()
 
         with st.expander("🗑️ Delete a Holding"):
