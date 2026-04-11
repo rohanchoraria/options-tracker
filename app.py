@@ -16,6 +16,12 @@ import modules.upstox as upstox
 from modules.alerts import send_email, build_risk_alert_email, build_opportunity_alert_email
 
 
+@st.cache_data(ttl=300)
+def _fetch_prices(symbols_tuple):
+    """Cache yfinance price fetches for 5 minutes to avoid re-fetching on every widget interaction."""
+    return market.get_multiple_stock_prices(list(symbols_tuple))
+
+
 def _render_html(html):
     """Render raw HTML — uses st.html() if available, falls back to st.markdown."""
     try:
@@ -334,7 +340,7 @@ with tab1:
     if holdings:
         symbols = [h["symbol"] for h in holdings]
         with st.spinner("Fetching live prices..."):
-            prices = market.get_multiple_stock_prices(symbols)
+            prices = _fetch_prices(tuple(sorted(symbols)))
 
         for h in holdings:
             cp_val = h["cost_price"] * h["quantity"]
@@ -817,7 +823,7 @@ with tab2:
 
         with st.spinner("Fetching live prices for open positions..."):
             symbols = list(set(t["symbol"] for t in open_trades))
-            prices = market.get_multiple_stock_prices(symbols)
+            prices = _fetch_prices(tuple(sorted(symbols)))
 
         risk_rows = []
         at_risk_list = []
@@ -1085,7 +1091,7 @@ with tab4:
     holding_symbols = list(set(h["symbol"] for h in holdings_summary))
     if holding_symbols:
         with st.spinner("Fetching live prices..."):
-            live_prices = market.get_multiple_stock_prices(holding_symbols)
+            live_prices = _fetch_prices(tuple(sorted(holding_symbols)))
     else:
         live_prices = {}
 
