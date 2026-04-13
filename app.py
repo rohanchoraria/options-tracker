@@ -1,7 +1,5 @@
 """
 Options Tracker — Main Streamlit App
-Design system: design_system_atlas.yaml (Mono)
-Read optionstracker.md before making changes.
 """
 
 import streamlit as st
@@ -15,73 +13,72 @@ import modules.calculations as calc
 import modules.upstox as upstox
 from modules.alerts import send_email, build_risk_alert_email, build_opportunity_alert_email
 
-
-@st.cache_data(ttl=300)
-def _fetch_prices(symbols_tuple):
-    """Cache yfinance price fetches for 5 minutes to avoid re-fetching on every widget interaction."""
-    return market.get_multiple_stock_prices(list(symbols_tuple))
-
-
-@st.cache_data(ttl=60)
-def _get_holdings():
-    return db.get_holdings()
-
-
-@st.cache_data(ttl=60)
-def _get_trades(status=None):
-    return db.get_trades(status=status)
-
-
-def _clear_db_cache():
-    _get_holdings.clear()
-    _get_trades.clear()
-
-
-def _render_html(html):
-    """Render raw HTML inline — avoids st.html() iframes which cause layout flicker."""
-    st.markdown(html, unsafe_allow_html=True)
-
-
 # ── Page Config ───────────────────────────────────────────
 
 st.set_page_config(page_title="Options Tracker", page_icon="📈", layout="wide")
 db.init_db()
 
-# ── Upstox OAuth Callback (must run before password gate) ─
+# ── Upstox OAuth Callback ─────────────────────────────────
+
 _params = st.query_params
 if "code" in _params and "upstox_token" not in st.session_state:
-    with st.spinner("Connecting to Upstox..."):
-        _token = upstox.exchange_code(_params["code"])
+    _token = upstox.exchange_code(_params["code"])
     if _token:
         st.session_state.upstox_token = _token
         st.session_state.authenticated = True
         st.query_params.clear()
         st.rerun()
     else:
-        st.error("Upstox login failed — please try again.")
+        st.error("Upstox login failed.")
         st.query_params.clear()
 
 # ── Password Gate ─────────────────────────────────────────
+
 if not st.session_state.get("authenticated"):
     st.title("Options Tracker")
     pwd = st.text_input("Password", type="password")
     if st.button("Login"):
-        from modules.config import get as _get_secret
-        if pwd == _get_secret("APP_PASSWORD", ""):
+        from modules.config import get as _cfg
+        if pwd == _cfg("APP_PASSWORD", ""):
             st.session_state.authenticated = True
             st.rerun()
         else:
             st.error("Incorrect password.")
     st.stop()
 
-# ── Upstox Sidebar ────────────────────────────────────────
-with st.sidebar:
-    _render_html("""
-    <div style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:500;
-                letter-spacing:0.08em;text-transform:uppercase;color:#9CA3AF;
-                margin-bottom:8px;">Live Data</div>
-    """)
+# ── DB Cache ──────────────────────────────────────────────
 
+@st.cache_data(ttl=60)
+def _get_holdings():
+    return db.get_holdings()
+
+@st.cache_data(ttl=60)
+def _get_trades(status=None):
+    return db.get_trades(status=status)
+
+@st.cache_data(ttl=60)
+def _get_watchlist():
+    return db.get_watchlist()
+
+@st.cache_data(ttl=300)
+def _get_alert_settings():
+    return db.get_alert_settings()
+
+@st.cache_data(ttl=60)
+def _get_equity_trades():
+    return db.get_equity_trades()
+
+def _clear_db_cache():
+    _get_holdings.clear()
+    _get_trades.clear()
+    _get_watchlist.clear()
+    _get_alert_settings.clear()
+    _get_equity_trades.clear()
+
+# ── Sidebar ───────────────────────────────────────────────
+
+with st.sidebar:
+    st.markdown("**Live Data**")
     if "upstox_token" in st.session_state:
         st.success("Upstox connected")
         if st.button("Disconnect", use_container_width=True):
@@ -89,580 +86,412 @@ with st.sidebar:
             st.rerun()
     else:
         st.warning("Upstox not connected")
-        st.caption("Connect to fetch live option premiums.")
-        auth_url = upstox.get_auth_url()
-        st.link_button("Login with Upstox", auth_url, use_container_width=True)
+        st.caption("Connect for live option premiums.")
+        st.link_button("Login with Upstox", upstox.get_auth_url(), use_container_width=True)
 
-# ── Atlas Design System — CSS Injection ───────────────────
+# ── CSS ───────────────────────────────────────────────────
 
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap');
-
-/* Base */
 html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
-
-/* Headings → Space Grotesk */
-h1, h2, h3 {
-    font-family: 'Space Grotesk', sans-serif !important;
-    letter-spacing: -0.02em;
-    color: #111827;
-}
-
-/* App title */
-h1 { font-size: 28px !important; font-weight: 700 !important; letter-spacing: -0.03em !important; }
-
-/* Tab labels */
-button[data-baseweb="tab"] p {
-    font-family: 'Space Grotesk', sans-serif !important;
-    font-weight: 600 !important;
-    font-size: 15px !important;
-}
-
-/* Metric labels */
-[data-testid="stMetricLabel"] {
-    font-family: 'JetBrains Mono', monospace !important;
-    font-size: 11px !important;
-    font-weight: 500 !important;
-    letter-spacing: 0.08em !important;
-    text-transform: uppercase !important;
-    color: #9CA3AF !important;
-}
-
-/* Metric values */
-[data-testid="stMetricValue"] {
-    font-family: 'JetBrains Mono', monospace !important;
-    font-size: 28px !important;
-    font-weight: 700 !important;
-    color: #111827 !important;
-}
-
-/* Metric delta */
-[data-testid="stMetricDelta"] {
-    font-family: 'JetBrains Mono', monospace !important;
-    font-size: 13px !important;
-}
-
-/* Dataframe */
 [data-testid="stDataFrame"] th {
     font-family: 'JetBrains Mono', monospace !important;
-    font-size: 11px !important;
-    font-weight: 600 !important;
-    letter-spacing: 0.04em !important;
-    text-transform: uppercase !important;
+    font-size: 11px !important; font-weight: 600 !important;
+    letter-spacing: 0.04em !important; text-transform: uppercase !important;
     background: #F9FAFB !important;
-    text-align: center !important;
 }
 [data-testid="stDataFrame"] td {
-    font-family: 'JetBrains Mono', monospace !important;
-    font-size: 13px !important;
-    text-align: center !important;
+    font-family: 'JetBrains Mono', monospace !important; font-size: 13px !important;
 }
-/* First column (stock name) stays left-aligned */
-[data-testid="stDataFrame"] th:first-child,
-[data-testid="stDataFrame"] td:first-child {
-    text-align: left !important;
-}
-
-/* Divider */
-hr { border-color: #E5E7EB !important; }
-
-/* Expander */
-[data-testid="stExpander"] summary {
-    font-family: 'Space Grotesk', sans-serif !important;
-    font-weight: 600 !important;
-    font-size: 14px !important;
-}
-
-/* Info / warning / success boxes */
-[data-testid="stAlert"] {
-    font-family: 'Inter', sans-serif !important;
-    border-radius: 4px !important;
-}
-
-/* Sidebar and inputs */
-label { font-family: 'Inter', sans-serif !important; font-size: 14px !important; }
-input, select, textarea {
-    font-family: 'JetBrains Mono', monospace !important;
-    font-size: 13px !important;
-}
-
-/* Caption */
-[data-testid="stCaptionContainer"] p {
-    font-family: 'JetBrains Mono', monospace !important;
-    font-size: 12px !important;
-    color: #9CA3AF !important;
-}
-
-/* Hide "Press Enter to submit form" hint */
+[data-testid="stExpander"] summary { font-weight: 600 !important; font-size: 14px !important; }
 [data-testid="InputInstructions"] { display: none !important; }
 </style>
 """, unsafe_allow_html=True)
 
-
-# ── Atlas Helper Components ───────────────────────────────
+# ── Helpers ───────────────────────────────────────────────
 
 def hero_bar(metrics):
-    """
-    Summary bar using native st.metric widgets.
-    metrics: list of (label, value, color) — color unused but kept for API compat.
-    """
     cols = st.columns(len(metrics))
-    for col, (label, value, _color) in zip(cols, metrics):
-        col.metric(label=label, value=value)
+    for col, (label, value, color) in zip(cols, metrics):
+        col.markdown(
+            f'<div style="padding:4px 0 16px 0;">'
+            f'<div style="font-family:monospace;font-size:11px;font-weight:500;'
+            f'letter-spacing:0.08em;text-transform:uppercase;color:#9CA3AF;margin-bottom:4px;">{label}</div>'
+            f'<div style="font-family:monospace;font-size:26px;font-weight:700;'
+            f'color:{color};line-height:1.1;">{value}</div>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
 
+def fmt_inr(v):
+    return "—" if v is None else f"₹{v:,.0f}"
 
-def section_label(text):
-    """Uppercase monospace section marker — the Atlas terminal look."""
-    _render_html(f"""
-    <div style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:500;
-                letter-spacing:0.08em;text-transform:uppercase;color:#9CA3AF;
-                margin-bottom:2px;margin-top:8px;">{text}</div>""")
+def pnl_color(v):
+    if v is None: return "#111827"
+    return "#16A34A" if v >= 0 else "#DC2626"
 
-
-def section_heading(text):
-    """H3-style heading without Streamlit's anchor link."""
-    _render_html(f"""
-    <h3 style="font-family:'Space Grotesk',sans-serif;font-size:20px;font-weight:600;
-               letter-spacing:-0.02em;color:#111827;margin:4px 0 16px 0;">{text}</h3>""")
-
-
-def fmt_inr(amount):
-    """Format a number as ₹ with Indian comma style."""
-    if amount is None:
-        return "—"
-    return f"₹{amount:,.0f}"
-
-
-def _fmt_prem(x):
-    try:
-        f = float(x)
-        return "—" if f != f else f"{f:.1f}"  # f != f is True only for NaN
-    except:
-        return "—"
-
-
-def _fmt_pct(x):
-    try:
-        f = float(x)
-        return "—" if f != f else f"{f:.1f}%"
-    except:
-        return "—"
-
-
-def pnl_color(val):
-    """Return Atlas semantic color for a P&L value."""
-    if isinstance(val, (int, float)):
-        return "#16A34A" if val >= 0 else "#DC2626"
-    return "#111827"
-
-
-def style_pnl_df(df, pnl_col="P&L (₹)", pct_col=None):
-    """Apply green/red coloring to P&L columns."""
-    def color_pnl(val):
+def style_pnl_df(df, *pnl_cols):
+    def _color(val):
         try:
-            v = float(str(val).replace("₹", "").replace(",", "").replace("%", "").replace("+", ""))
-            color = "#16A34A" if v >= 0 else "#DC2626"
-            return f"color:{color};font-weight:600;"
+            v = float(str(val).replace("₹","").replace(",","").replace("%","").replace("+",""))
+            return f"color:{'#16A34A' if v>=0 else '#DC2626'};font-weight:600;"
         except Exception:
             return ""
-
     styler = df.style
-    cols = [c for c in [pnl_col, pct_col] if c and c in df.columns]
-    for col in cols:
-        styler = styler.map(color_pnl, subset=[col])
+    for col in pnl_cols:
+        if col in df.columns:
+            styler = styler.map(_color, subset=[col])
     return styler
 
+def section_label(text):
+    st.markdown(
+        f'<div style="font-family:monospace;font-size:11px;font-weight:500;'
+        f'letter-spacing:0.08em;text-transform:uppercase;color:#9CA3AF;margin:12px 0 2px 0;">{text}</div>',
+        unsafe_allow_html=True,
+    )
 
-# ── App Header ────────────────────────────────────────────
+# ── Header & Tabs ─────────────────────────────────────────
 
-_render_html("""
-<div style="margin-bottom:20px;">
-    <span style="font-family:'Space Grotesk',sans-serif;font-size:28px;font-weight:700;
-                 letter-spacing:-0.03em;color:#111827;">Options Tracker</span>
-</div>
-""")
+st.markdown("# Options Tracker")
 
 tab1, tab2, tab3, tab4 = st.tabs(["Portfolio", "Risk Monitor", "Options Screener", "P&L Summary"])
-
 
 # ══════════════════════════════════════════════════════════
 # TAB 1 — PORTFOLIO
 # ══════════════════════════════════════════════════════════
 
-with tab1:
+@st.fragment
+def _render_tab1():
 
-    # ── Section A: Equity Holdings ────────────────────────
-
+    # ── Equity Holdings ───────────────────────────────────
     section_label("Equity Holdings")
 
-    col_add, col_import = st.columns([1, 1])
-
-    with col_add:
+    c1, c2 = st.columns(2)
+    with c1:
         with st.expander("➕ Add Holding"):
             with st.form("form_add_holding"):
-                sym = st.selectbox("Symbol", [""] + sorted(upstox.INSTRUMENT_KEYS.keys()), key="add_holding_sym")
-                qty = st.number_input("Quantity", min_value=1, step=1)
-                cp = st.number_input("Cost Price (₹)", min_value=0.01, format="%.2f")
-                da = st.date_input("Date Added", value=date.today())
+                sym   = st.selectbox("Symbol", [""] + sorted(upstox.INSTRUMENT_KEYS.keys()))
+                qty   = st.number_input("Quantity", min_value=1, step=1)
+                cp    = st.number_input("Cost Price (₹)", min_value=0.01, format="%.2f")
+                da    = st.date_input("Date Added", value=date.today())
                 notes = st.text_input("Notes (optional)")
                 if st.form_submit_button("Add"):
                     if sym:
                         db.add_holding(sym, qty, cp, da, notes)
                         st.success(f"{sym} added.")
                         _clear_db_cache()
-                        st.rerun()
+                        st.rerun(scope="app")
+                    else:
+                        st.warning("Select a symbol.")
 
-    with col_import:
+    with c2:
         with st.expander("📂 Import Holdings CSV"):
-            st.markdown("Download template: `sample_data/sample_holdings.csv`")
+            st.caption("Columns: symbol, quantity, cost_price, date_added")
             uploaded_h = st.file_uploader("Upload CSV", type="csv", key="holdings_csv")
             if uploaded_h:
                 try:
                     df_h = pd.read_csv(uploaded_h)
-                    required = {"symbol", "quantity", "cost_price", "date_added"}
-                    if required.issubset(df_h.columns):
+                    if {"symbol","quantity","cost_price","date_added"}.issubset(df_h.columns):
                         db.bulk_insert_holdings(df_h.to_dict("records"))
                         st.success(f"{len(df_h)} holdings imported.")
                         _clear_db_cache()
-                        st.rerun()
+                        st.rerun(scope="app")
                     else:
-                        st.error(f"CSV must have columns: {required}")
+                        st.error("Missing required columns.")
                 except Exception as e:
                     st.error(str(e))
 
     holdings = _get_holdings()
-    prices = {}
-    rows = []
-    total_invested = 0
-    total_current = 0
+    prices   = st.session_state.get("prices", {})
 
     if holdings:
-        symbols = [h["symbol"] for h in holdings]
         if st.button("🔄 Refresh Prices", key="refresh_prices"):
-            _fetch_prices.clear()
-        prices = _fetch_prices(tuple(sorted(symbols)))
+            with st.spinner("Fetching prices..."):
+                st.session_state["prices"] = market.get_multiple_stock_prices(
+                    [h["symbol"] for h in holdings])
+            prices = st.session_state["prices"]
 
-        for h in holdings:
-            cp_val = h["cost_price"] * h["quantity"]
-            cur_price = prices.get(h["symbol"])
-            cur_val = (cur_price * h["quantity"]) if cur_price else None
-            pnl_amt = (cur_val - cp_val) if cur_val is not None else None
-            pnl_pct = (pnl_amt / cp_val * 100) if pnl_amt is not None and cp_val > 0 else None
-            total_invested += cp_val
-            if cur_val:
-                total_current += cur_val
-            rows.append({
-                "Symbol": h["symbol"],
-                "Qty": h["quantity"],
-                "Cost Price (₹)": round(h["cost_price"], 2),
-                "Current Price (₹)": round(cur_price, 2) if cur_price else None,
-                "Invested (₹)": round(cp_val),
-                "Current Value (₹)": round(cur_val) if cur_val else None,
-                "P&L (₹)": round(pnl_amt) if pnl_amt is not None else None,
-                "P&L %": f"{pnl_pct:+.0f}%" if pnl_pct is not None else "—",
-                "Notes": h.get("notes", ""),
-            })
+    # Build rows
+    rows = []
+    total_invested = total_current = 0
+    for h in holdings:
+        cp_val    = h["cost_price"] * h["quantity"]
+        cur_price = prices.get(h["symbol"])
+        cur_val   = (cur_price * h["quantity"]) if cur_price else None
+        pnl_amt   = (cur_val - cp_val) if cur_val is not None else None
+        pnl_pct   = (pnl_amt / cp_val * 100) if pnl_amt is not None and cp_val > 0 else None
+        total_invested += cp_val
+        if cur_val: total_current += cur_val
+        rows.append({
+            "Symbol":           h["symbol"],
+            "Qty":              h["quantity"],
+            "Cost Price (₹)":   round(h["cost_price"], 2),
+            "Current Price (₹)":round(cur_price, 2) if cur_price else None,
+            "Invested (₹)":     round(cp_val),
+            "Current Value (₹)":round(cur_val) if cur_val else None,
+            "P&L (₹)":          round(pnl_amt) if pnl_amt is not None else None,
+            "P&L %":            f"{pnl_pct:+.1f}%" if pnl_pct is not None else "—",
+            "Notes":            h.get("notes",""),
+        })
 
-        # Summary always visible
-        total_pnl = total_current - total_invested if total_current else 0
+    if holdings:
+        total_pnl     = total_current - total_invested if total_current else 0
         total_pnl_pct = (total_pnl / total_invested * 100) if total_invested > 0 else 0
         hero_bar([
-            ("Total Invested", fmt_inr(total_invested), "#FFFFFF"),
-            ("Current Value", fmt_inr(total_current), "#FFFFFF"),
-            ("Unrealised P&L", fmt_inr(total_pnl), "#16A34A" if total_pnl >= 0 else "#DC2626"),
-            ("Return", f"{total_pnl_pct:+.0f}%", "#16A34A" if total_pnl_pct >= 0 else "#DC2626"),
+            ("Total Invested",  fmt_inr(total_invested), "#111827"),
+            ("Current Value",   fmt_inr(total_current),  "#111827"),
+            ("Unrealised P&L",  fmt_inr(total_pnl),      pnl_color(total_pnl)),
+            ("Return",          f"{total_pnl_pct:+.1f}%",pnl_color(total_pnl_pct)),
         ])
 
     with st.expander("Portfolio at a glance", expanded=True):
-        if holdings:
-            df_display = pd.DataFrame(rows)
+        if rows:
             st.dataframe(
-                style_pnl_df(df_display, "P&L (₹)", "P&L %"),
-                use_container_width=True,
-                hide_index=True,
+                style_pnl_df(pd.DataFrame(rows), "P&L (₹)", "P&L %"),
+                use_container_width=True, hide_index=True,
                 column_config={
-                    "Cost Price (₹)": st.column_config.NumberColumn(format="%.2f"),
+                    "Cost Price (₹)":    st.column_config.NumberColumn(format="%.2f"),
                     "Current Price (₹)": st.column_config.NumberColumn(format="%.2f"),
-                    "Invested (₹)": st.column_config.NumberColumn(format="%.0f"),
+                    "Invested (₹)":      st.column_config.NumberColumn(format="%.0f"),
                     "Current Value (₹)": st.column_config.NumberColumn(format="%.0f"),
-                    "P&L (₹)": st.column_config.NumberColumn(format="%.0f"),
+                    "P&L (₹)":           st.column_config.NumberColumn(format="%.0f"),
                 },
             )
-
-            with st.expander("📤 Record Exit / Sell"):
-                holding_options = {f"{h['symbol']} — {h['quantity']} shares @ ₹{h['cost_price']}": h for h in holdings}
-                sel_label = st.selectbox("Select holding", list(holding_options.keys()), key="exit_sel")
-                sel_h = holding_options[sel_label]
-                with st.form("form_exit_holding"):
-                    exit_qty = st.number_input("Quantity sold", min_value=1, max_value=int(sel_h["quantity"]),
-                                               value=int(sel_h["quantity"]), key=f"exit_qty_{sel_h['id']}")
-                    exit_price = st.number_input("Sell price (₹)", min_value=0.01, format="%.2f",
-                                                 value=float(sel_h["cost_price"]), key=f"exit_price_{sel_h['id']}")
-                    exit_date = st.date_input("Exit date", value=date.today(), key="exit_date")
-                    exit_notes = st.text_input("Notes (optional)", key="exit_notes")
-                    if st.form_submit_button("Record Exit"):
-                        proceeds = exit_qty * exit_price
-                        cost = exit_qty * sel_h["cost_price"]
-                        pnl = proceeds - cost
-                        pnl_pct = (pnl / cost * 100) if cost > 0 else 0
-                        db.add_equity_trade(sel_h["symbol"], exit_qty, sel_h["cost_price"],
-                                            exit_price, round(pnl, 2), exit_date, exit_notes)
-                        new_qty = sel_h["quantity"] - exit_qty
-                        if new_qty <= 0:
-                            db.delete_holding(sel_h["id"])
-                            st.success(f"Full exit recorded. P&L: {fmt_inr(pnl)} ({pnl_pct:+.0f}%)")
-                        else:
-                            db.update_holding(sel_h["id"], new_qty, sel_h["cost_price"], sel_h.get("notes", ""))
-                            st.success(f"Partial exit recorded. Sold {exit_qty} shares, {new_qty} remain. P&L: {fmt_inr(pnl)} ({pnl_pct:+.0f}%)")
-                        _clear_db_cache()
-                        st.rerun()
-
-            with st.expander("✏️ Edit a Holding"):
-                holding_options_edit = {f"{h['symbol']} — {h['quantity']} shares @ ₹{h['cost_price']}": h for h in holdings}
-                sel_edit_h_label = st.selectbox("Select holding to edit", list(holding_options_edit.keys()), key="edit_holding_sel")
-                eh = holding_options_edit[sel_edit_h_label]
-                with st.form("form_edit_holding"):
-                    e_qty = st.number_input("Quantity", min_value=1, step=1,
-                                            value=int(eh["quantity"]), key=f"eh_qty_{eh['id']}")
-                    e_cp = st.number_input("Cost Price (₹)", min_value=0.01, format="%.2f",
-                                           value=float(eh["cost_price"]), key=f"eh_cp_{eh['id']}")
-                    e_notes = st.text_input("Notes", value=eh.get("notes", ""), key=f"eh_notes_{eh['id']}")
-                    if st.form_submit_button("Save Changes"):
-                        db.update_holding(eh["id"], e_qty, e_cp, e_notes)
-                        st.success(f"{eh['symbol']} updated.")
-                        _clear_db_cache()
-                        st.rerun()
-
-            with st.expander("🗑️ Delete a Holding"):
-                holding_options_del = {f"{h['symbol']} (ID {h['id']})": h["id"] for h in holdings}
-                sel = st.selectbox("Select holding to delete", list(holding_options_del.keys()))
-                if st.button("Delete", key="del_holding"):
-                    db.delete_holding(holding_options_del[sel])
-                    st.success("Deleted.")
-                    _clear_db_cache()
-                    st.rerun()
         else:
             st.info("No holdings yet. Add one above or import a CSV.")
 
+    if holdings:
+        with st.expander("📤 Record Exit / Sell"):
+            h_opts  = {f"{h['symbol']} — {h['quantity']} shares @ ₹{h['cost_price']}": h for h in holdings}
+            sel_lbl = st.selectbox("Select holding", list(h_opts.keys()), key="exit_sel")
+            sel_h   = h_opts[sel_lbl]
+            with st.form("form_exit_holding"):
+                exit_qty   = st.number_input("Quantity sold", min_value=1,
+                                             max_value=int(sel_h["quantity"]),
+                                             value=int(sel_h["quantity"]),
+                                             key=f"exit_qty_{sel_h['id']}")
+                exit_price = st.number_input("Sell price (₹)", min_value=0.01, format="%.2f",
+                                             value=float(sel_h["cost_price"]),
+                                             key=f"exit_price_{sel_h['id']}")
+                exit_date  = st.date_input("Exit date", value=date.today())
+                exit_notes = st.text_input("Notes (optional)")
+                if st.form_submit_button("Record Exit"):
+                    pnl     = (exit_price - sel_h["cost_price"]) * exit_qty
+                    pnl_pct = (pnl / (sel_h["cost_price"] * exit_qty) * 100)
+                    db.add_equity_trade(sel_h["symbol"], exit_qty, sel_h["cost_price"],
+                                        exit_price, round(pnl, 2), exit_date, exit_notes)
+                    new_qty = sel_h["quantity"] - exit_qty
+                    if new_qty <= 0:
+                        db.delete_holding(sel_h["id"])
+                        st.success(f"Full exit. P&L: {fmt_inr(pnl)} ({pnl_pct:+.1f}%)")
+                    else:
+                        db.update_holding(sel_h["id"], new_qty, sel_h["cost_price"], sel_h.get("notes",""))
+                        st.success(f"Partial exit. {new_qty} remain. P&L: {fmt_inr(pnl)} ({pnl_pct:+.1f}%)")
+                    _clear_db_cache()
+                    st.rerun(scope="app")
+
+        with st.expander("✏️ Edit a Holding"):
+            h_edit = {f"{h['symbol']} — {h['quantity']} shares @ ₹{h['cost_price']}": h for h in holdings}
+            sel_eh = h_edit[st.selectbox("Select", list(h_edit.keys()), key="edit_holding_sel")]
+            with st.form("form_edit_holding"):
+                e_qty   = st.number_input("Quantity", min_value=1, step=1,
+                                          value=int(sel_eh["quantity"]), key=f"eh_qty_{sel_eh['id']}")
+                e_cp    = st.number_input("Cost Price (₹)", min_value=0.01, format="%.2f",
+                                          value=float(sel_eh["cost_price"]), key=f"eh_cp_{sel_eh['id']}")
+                e_notes = st.text_input("Notes", value=sel_eh.get("notes",""), key=f"eh_notes_{sel_eh['id']}")
+                if st.form_submit_button("Save"):
+                    db.update_holding(sel_eh["id"], e_qty, e_cp, e_notes)
+                    st.success("Updated.")
+                    _clear_db_cache()
+                    st.rerun(scope="app")
+
+        with st.expander("🗑️ Delete a Holding"):
+            h_del = {f"{h['symbol']} (ID {h['id']})": h["id"] for h in holdings}
+            sel_d = st.selectbox("Select", list(h_del.keys()), key="del_holding_sel")
+            if st.button("Delete", key="del_holding_btn"):
+                db.delete_holding(h_del[sel_d])
+                st.success("Deleted.")
+                _clear_db_cache()
+                st.rerun(scope="app")
+
     st.divider()
 
-    # ── Section B: Open Call Opportunities ───────────────
-
+    # ── Call Opportunities ────────────────────────────────
     section_label("Call Opportunities")
     open_trades = _get_trades(status="open")
 
     with st.expander("Stocks with no call sold this month", expanded=True):
         if holdings:
-            opportunities = calc.get_open_opportunities(holdings, open_trades)
-            if opportunities:
-                opp_rows = []
-                for h in opportunities:
-                    cur_price = prices.get(h["symbol"]) if holdings else None
-                    lot = market.get_lot_size(h["symbol"])
-                    opp_rows.append({
-                        "Symbol": h["symbol"],
-                        "Qty Held": h["quantity"],
-                        "Cost Price (₹)": round(h["cost_price"]),
-                        "Current Price (₹)": round(cur_price) if cur_price else None,
-                        "Lot Size": lot,
-                        "Notes": h.get("notes", ""),
-                    })
-                st.warning(f"⚡ {len(opportunities)} stock(s) with no call sold this month")
-                st.dataframe(pd.DataFrame(opp_rows), use_container_width=True, hide_index=True,
-                             column_config={
-                                 "Cost Price (₹)": st.column_config.NumberColumn(format="%.0f"),
-                                 "Current Price (₹)": st.column_config.NumberColumn(format="%.0f"),
-                             })
+            opps = calc.get_open_opportunities(holdings, open_trades)
+            if opps:
+                st.warning(f"⚡ {len(opps)} stock(s) with no call sold this month")
+                st.dataframe(pd.DataFrame([{
+                    "Symbol":           h["symbol"],
+                    "Qty Held":         h["quantity"],
+                    "Cost Price (₹)":   round(h["cost_price"]),
+                    "Current Price (₹)":round(prices[h["symbol"]], 2) if prices.get(h["symbol"]) is not None else None,
+                    "Lot Size":         market.get_lot_size(h["symbol"]),
+                } for h in opps]), use_container_width=True, hide_index=True)
             else:
-                st.success("All holdings have a call sold for this month.")
+                st.success("All holdings have a call sold this month.")
         else:
-            st.info("Add holdings above to track call opportunities.")
+            st.info("Add holdings to track opportunities.")
 
     st.divider()
 
-    # ── Section C: Open Positions ─────────────────────────
-
+    # ── Open Positions ────────────────────────────────────
     section_label("Open Positions")
 
-    col_t1, col_t2 = st.columns([1, 1])
-    with col_t1:
+    c1, c2 = st.columns(2)
+    with c1:
         with st.expander("➕ Add Trade"):
             known_syms = sorted(upstox.INSTRUMENT_KEYS.keys())
             t_sym = st.selectbox("Symbol", [""] + known_syms, key="add_trade_sym")
             auto_lot = market.get_lot_size(t_sym) if t_sym else 1
+            if t_sym:
+                st.caption(f"Lot size: {auto_lot}")
             with st.form("form_add_trade"):
-                t_dir = st.radio("Direction", ["Sell", "Buy"], horizontal=True,
-                                 help="Sell = write/short the option. Buy = long the option.")
-                t_type = st.selectbox("Option Type", ["call", "put"])
-                t_strike = st.number_input("Strike Price (₹)", min_value=0.01, format="%.2f")
-                t_expiry = st.date_input("Expiry Date")
-                premium_label = "Premium Received (₹)" if t_dir == "Sell" else "Premium Paid (₹)"
-                t_premium = st.number_input(premium_label, min_value=0.01, format="%.2f")
-                t_qty = st.number_input("Lots", min_value=1, step=1)
-                t_date = st.date_input("Trade Date", value=date.today())
-                t_notes = st.text_input("Notes (optional)")
+                t_dir     = st.radio("Direction", ["Sell","Buy"], horizontal=True)
+                t_type    = st.selectbox("Option Type", ["call","put"])
+                t_strike  = st.number_input("Strike Price (₹)", min_value=0.01, format="%.2f")
+                t_expiry  = st.date_input("Expiry Date")
+                t_premium = st.number_input(
+                    "Premium Received (₹)" if t_dir=="Sell" else "Premium Paid (₹)",
+                    min_value=0.01, format="%.2f")
+                t_qty     = st.number_input("Lots", min_value=1, step=1)
+                t_date    = st.date_input("Trade Date", value=date.today())
+                t_notes   = st.text_input("Notes (optional)")
                 if st.form_submit_button("Add Trade"):
                     if t_sym:
                         db.add_trade(t_sym, t_type, t_strike, t_expiry, t_premium,
                                      t_qty, auto_lot, t_date, t_notes, direction=t_dir.lower())
-                        st.success(f"Trade added: {t_dir} {t_sym} {t_type.upper()} {t_strike}")
+                        st.success("Trade added.")
                         _clear_db_cache()
-                        st.rerun()
+                        st.rerun(scope="app")
+                    else:
+                        st.warning("Select a symbol.")
 
-    with col_t2:
+    with c2:
         with st.expander("📂 Import Trades CSV"):
-            st.markdown("Download template: `sample_data/sample_trades.csv`")
+            st.caption("Columns: symbol, trade_type, strike_price, expiry_date, premium_received, quantity, lot_size, trade_date")
             uploaded_t = st.file_uploader("Upload CSV", type="csv", key="trades_csv")
             if uploaded_t:
                 try:
                     df_t = pd.read_csv(uploaded_t)
-                    required_t = {"symbol", "trade_type", "strike_price", "expiry_date",
-                                  "premium_received", "quantity", "lot_size", "trade_date"}
-                    if required_t.issubset(df_t.columns):
+                    req  = {"symbol","trade_type","strike_price","expiry_date",
+                            "premium_received","quantity","lot_size","trade_date"}
+                    if req.issubset(df_t.columns):
                         db.bulk_insert_trades(df_t.to_dict("records"))
                         st.success(f"{len(df_t)} trades imported.")
                         _clear_db_cache()
-                        st.rerun()
+                        st.rerun(scope="app")
                     else:
-                        st.error(f"CSV must have columns: {required_t}")
+                        st.error(f"Missing columns: {req - set(df_t.columns)}")
                 except Exception as e:
                     st.error(str(e))
 
-    # Open positions table
-    open_trades = _get_trades(status="open")
-    all_trades = _get_trades()
-
-    # Summary always visible
+    # Open positions summary bar
     if open_trades:
-        op_total_premium = sum(
-            t["premium_received"] * t["quantity"] * t["lot_size"]
-            for t in open_trades if (t.get("direction") or "sell") == "sell"
-        )
-        op_days = [calc.is_expiry_near(t["expiry_date"], 999)[1] for t in open_trades]
+        op_premium  = sum(t["premium_received"]*t["quantity"]*t["lot_size"]
+                          for t in open_trades if (t.get("direction") or "sell") == "sell")
+        op_days     = [calc.is_expiry_near(t["expiry_date"], 999)[1] for t in open_trades]
         nearest_exp = min(op_days) if op_days else None
         hero_bar([
-            ("Open Positions", str(len(open_trades)), "#FFFFFF"),
-            ("Total Premium Recv", fmt_inr(op_total_premium), "#16A34A"),
-            ("Nearest Expiry", f"{nearest_exp}d" if nearest_exp is not None else "—",
-             "#DC2626" if nearest_exp is not None and nearest_exp <= 7 else "#FFFFFF"),
+            ("Open Positions",    str(len(open_trades)),   "#111827"),
+            ("Total Premium Recv",fmt_inr(op_premium),     "#16A34A"),
+            ("Nearest Expiry",
+             f"{nearest_exp}d" if nearest_exp is not None else "—",
+             "#DC2626" if nearest_exp is not None and nearest_exp <= 7 else "#111827"),
         ])
 
-    with st.expander(f"Current options positions ({len(open_trades)} open)", expanded=True):
+    with st.expander("Current options positions", expanded=True):
         if open_trades:
-            open_rows = []
-            for t in open_trades:
-                direction = t.get("direction") or "sell"
-                premium_total = t["premium_received"] * t["quantity"] * t["lot_size"]
-                _, days_left = calc.is_expiry_near(t["expiry_date"], 999)
-                premium_col = "Premium Recv (₹)" if direction == "sell" else "Premium Paid (₹)"
-                open_rows.append({
-                    "Symbol": t["symbol"],
-                    "Direction": direction.upper(),
-                    "Type": t["trade_type"].upper(),
-                    "Strike (₹)": round(t["strike_price"]),
-                    "Expiry": t["expiry_date"],
-                    "Days Left": days_left,
-                    premium_col: round(t["premium_received"], 1),
-                    "Lots": t["quantity"],
-                    "Lot Size": t["lot_size"],
-                    "Total (₹)": round(premium_total),
-                    "Trade Date": t["trade_date"],
-                    "Notes": t.get("notes", ""),
+            st.dataframe(pd.DataFrame([{
+                "Symbol":     t["symbol"],
+                "Direction":  (t.get("direction") or "sell").upper(),
+                "Type":       t["trade_type"].upper(),
+                "Strike (₹)": round(t["strike_price"]),
+                "Expiry":     t["expiry_date"],
+                "Days Left":  calc.is_expiry_near(t["expiry_date"], 999)[1],
+                "Premium (₹)":round(t["premium_received"], 1),
+                "Lots":       t["quantity"],
+                "Lot Size":   t["lot_size"],
+                "Total (₹)":  round(t["premium_received"]*t["quantity"]*t["lot_size"]),
+                "Notes":      t.get("notes",""),
+            } for t in open_trades]), use_container_width=True, hide_index=True,
+                column_config={
+                    "Strike (₹)":  st.column_config.NumberColumn(format="%.0f"),
+                    "Premium (₹)": st.column_config.NumberColumn(format="%.1f"),
+                    "Total (₹)":   st.column_config.NumberColumn(format="%.0f"),
                 })
-            st.dataframe(pd.DataFrame(open_rows), use_container_width=True, hide_index=True,
-                         column_config={
-                             "Strike (₹)": st.column_config.NumberColumn(format="%.0f"),
-                             "Premium Recv (₹)": st.column_config.NumberColumn(format="%.1f"),
-                             "Premium Paid (₹)": st.column_config.NumberColumn(format="%.1f"),
-                             "Total (₹)": st.column_config.NumberColumn(format="%.0f"),
-                         })
-
-            # ── Edit Trade ────────────────────────────────────
-            with st.expander("✏️ Edit a Trade"):
-                edit_opts = {
-                    f"{t.get('direction','sell').upper()} {t['symbol']} {t['trade_type'].upper()} {t['strike_price']} exp {t['expiry_date']} (ID {t['id']})": t
-                    for t in open_trades
-                }
-                sel_edit_label = st.selectbox("Select trade to edit", list(edit_opts.keys()), key="edit_trade_sel")
-                et = edit_opts[sel_edit_label]
-                auto_edit_lot = market.get_lot_size(et["symbol"])
-                st.caption(f"Lot size for {et['symbol']}: {auto_edit_lot}")
-                with st.form("form_edit_trade"):
-                    e_dir = st.radio("Direction", ["Sell", "Buy"], horizontal=True,
-                                     index=0 if (et.get("direction") or "sell").lower() == "sell" else 1,
-                                     key=f"edit_dir_{et['id']}")
-                    e_type = st.selectbox("Option Type", ["call", "put"],
-                                          index=0 if et["trade_type"] == "call" else 1,
-                                          key=f"edit_type_{et['id']}")
-                    e_strike = st.number_input("Strike Price (₹)", min_value=0.01, format="%.2f",
-                                               value=float(et["strike_price"]), key=f"edit_strike_{et['id']}")
-                    e_expiry = st.date_input("Expiry Date",
-                                             value=datetime.strptime(et["expiry_date"], "%Y-%m-%d").date(),
-                                             key=f"edit_expiry_{et['id']}")
-                    e_premium = st.number_input("Premium (₹)", min_value=0.01, format="%.2f",
-                                                value=float(et["premium_received"]), key=f"edit_premium_{et['id']}")
-                    e_qty = st.number_input("Lots", min_value=1, step=1,
-                                            value=int(et["quantity"]), key=f"edit_qty_{et['id']}")
-                    e_notes = st.text_input("Notes", value=et.get("notes", ""), key=f"edit_notes_{et['id']}")
-                    if st.form_submit_button("Save Changes"):
-                        db.update_trade(et["id"], e_strike, e_expiry, e_premium,
-                                        e_qty, auto_edit_lot, e_notes, e_dir, e_type)
-                        st.success("Trade updated.")
-                        _clear_db_cache()
-                        st.rerun()
         else:
             st.info("No open positions. Add a trade above.")
 
-    # ── Record Outcome (end of month) ─────────────────
     if open_trades:
-        section_label("Record Outcome")
-        with st.expander("Close positions at month end"):
-            _render_html("""
-            <div style="background:#F9FAFB;border:1px solid #E5E7EB;border-left:3px solid #2563EB;
-                        border-radius:0 4px 4px 0;padding:12px 16px;margin-bottom:16px;">
-                <span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#6B7280;">
-                    At month end, record what happened to each position:
-                    <b>Expired worthless</b> (full premium kept) ·
-                    <b>Bought back</b> (enter buyback price, P&amp;L = premium received − buyback cost) ·
-                    <b>Exercised</b> (option was assigned against you)
-                </span>
-            </div>""")
+        with st.expander("✏️ Edit a Trade"):
+            edit_opts = {
+                f"{t.get('direction','sell').upper()} {t['symbol']} {t['trade_type'].upper()} "
+                f"{t['strike_price']} exp {t['expiry_date']} (ID {t['id']})": t
+                for t in open_trades
+            }
+            et = edit_opts[st.selectbox("Select trade", list(edit_opts.keys()), key="edit_trade_sel")]
+            auto_edit_lot = market.get_lot_size(et["symbol"])
+            st.caption(f"Lot size for {et['symbol']}: {auto_edit_lot}")
+            with st.form("form_edit_trade"):
+                e_dir     = st.radio("Direction", ["Sell","Buy"], horizontal=True,
+                                     index=0 if (et.get("direction") or "sell").lower()=="sell" else 1,
+                                     key=f"edit_dir_{et['id']}")
+                e_type    = st.selectbox("Option Type", ["call","put"],
+                                         index=0 if et["trade_type"]=="call" else 1,
+                                         key=f"edit_type_{et['id']}")
+                e_strike  = st.number_input("Strike (₹)", min_value=0.01, format="%.2f",
+                                            value=float(et["strike_price"]), key=f"edit_strike_{et['id']}")
+                e_expiry  = st.date_input("Expiry",
+                                          value=datetime.strptime(et["expiry_date"],"%Y-%m-%d").date(),
+                                          key=f"edit_expiry_{et['id']}")
+                e_premium = st.number_input("Premium (₹)", min_value=0.01, format="%.2f",
+                                            value=float(et["premium_received"]), key=f"edit_premium_{et['id']}")
+                e_qty     = st.number_input("Lots", min_value=1, step=1,
+                                            value=int(et["quantity"]), key=f"edit_qty_{et['id']}")
+                e_notes   = st.text_input("Notes", value=et.get("notes",""), key=f"edit_notes_{et['id']}")
+                if st.form_submit_button("Save Changes"):
+                    db.update_trade(et["id"], e_strike, e_expiry, e_premium,
+                                    e_qty, auto_edit_lot, e_notes, e_dir, e_type)
+                    st.success("Updated.")
+                    _clear_db_cache()
+                    st.rerun(scope="app")
 
+        with st.expander("Close positions at month end"):
+            st.caption("Record outcome: expired worthless · bought back · exercised/assigned")
             with st.form("form_close_trade"):
-                trade_map = {t["id"]: t for t in open_trades}
+                trade_map  = {t["id"]: t for t in open_trades}
                 trade_opts = {
-                    f"{t.get('direction','sell').upper()} {t['symbol']} {t['trade_type'].upper()} {t['strike_price']} exp {t['expiry_date']}": t["id"]
+                    f"{t.get('direction','sell').upper()} {t['symbol']} {t['trade_type'].upper()} "
+                    f"{t['strike_price']} exp {t['expiry_date']}": t["id"]
                     for t in open_trades
                 }
-                sel_label = st.selectbox("Select position", list(trade_opts.keys()))
-                sel_id = trade_opts[sel_label]
+                sel_id    = trade_opts[st.selectbox("Select position", list(trade_opts.keys()))]
                 sel_trade = trade_map[sel_id]
                 direction = sel_trade.get("direction") or "sell"
+                action    = st.radio("Outcome", ["Expired worthless","Closed / Bought back","Exercised"],
+                                     horizontal=True)
+                close_p   = st.number_input("Close Price (₹)", min_value=0.0, format="%.2f") \
+                            if action == "Closed / Bought back" else 0.0
+                close_d   = st.date_input("Date", value=date.today())
 
-                action = st.radio("Outcome", ["Expired worthless", "Closed / Bought back", "Exercised"], horizontal=True)
-                close_p = st.number_input("Close Price (₹)", min_value=0.0, format="%.2f",
-                                          help="Price at which position was closed") if action == "Closed / Bought back" else 0.0
-                close_d = st.date_input("Date", value=date.today())
-
-                # Exercise portfolio impact preview
                 if action == "Exercised":
                     shares = sel_trade["quantity"] * sel_trade["lot_size"]
-                    strike = sel_trade["strike_price"]
-                    symbol = sel_trade["symbol"]
                     t_type = sel_trade["trade_type"]
-
-                    if direction == "sell" and t_type == "call":
-                        impact_msg = f"Shares called away: remove {shares} shares of {symbol} from portfolio (sold at ₹{strike})"
-                    elif direction == "sell" and t_type == "put":
-                        impact_msg = f"Shares assigned: add {shares} shares of {symbol} to portfolio at ₹{strike}"
-                    elif direction == "buy" and t_type == "call":
-                        impact_msg = f"You exercised: add {shares} shares of {symbol} to portfolio at ₹{strike}"
-                    else:  # buy put
-                        impact_msg = f"You exercised: remove {shares} shares of {symbol} from portfolio (sold at ₹{strike})"
-
-                    st.info(f"Portfolio impact: {impact_msg}")
-                    auto_update = st.checkbox("Automatically update portfolio", value=True)
+                    symbol = sel_trade["symbol"]
+                    strike = sel_trade["strike_price"]
+                    msgs   = {
+                        ("sell","call"): f"Shares called away: remove {shares} {symbol} (sold @ ₹{strike})",
+                        ("sell","put"):  f"Shares assigned: add {shares} {symbol} @ ₹{strike}",
+                        ("buy","call"):  f"You exercised: add {shares} {symbol} @ ₹{strike}",
+                        ("buy","put"):   f"You exercised: remove {shares} {symbol} (sold @ ₹{strike})",
+                    }
+                    st.info(f"Portfolio impact: {msgs.get((direction, t_type), '')}")
+                    auto_update = st.checkbox("Auto-update portfolio", value=True)
                 else:
                     auto_update = False
 
@@ -675,519 +504,413 @@ with tab1:
                     else:
                         db.mark_trade_exercised(sel_id)
                         if auto_update:
-                            shares = sel_trade["quantity"] * sel_trade["lot_size"]
-                            strike = sel_trade["strike_price"]
-                            symbol = sel_trade["symbol"]
-                            t_type = sel_trade["trade_type"]
-                            # Determine whether to add or remove shares
-                            adding = (direction == "sell" and t_type == "put") or \
-                                     (direction == "buy" and t_type == "call")
+                            shares   = sel_trade["quantity"] * sel_trade["lot_size"]
+                            symbol   = sel_trade["symbol"]
+                            strike   = sel_trade["strike_price"]
+                            t_type   = sel_trade["trade_type"]
+                            adding   = (direction=="sell" and t_type=="put") or \
+                                       (direction=="buy"  and t_type=="call")
+                            cur_h    = db.get_holdings()
+                            existing = next((x for x in cur_h if x["symbol"]==symbol), None)
                             if adding:
-                                # Merge into existing holding at blended cost price
-                                holdings_cur = db.get_holdings()
-                                existing = next((x for x in holdings_cur if x["symbol"] == symbol), None)
                                 if existing:
-                                    total_qty = existing["quantity"] + shares
-                                    blended_cost = ((existing["cost_price"] * existing["quantity"]) + (strike * shares)) / total_qty
-                                    db.update_holding(existing["id"], total_qty, round(blended_cost, 4), existing.get("notes", ""))
+                                    tq = existing["quantity"] + shares
+                                    bc = ((existing["cost_price"]*existing["quantity"]) + (strike*shares)) / tq
+                                    db.update_holding(existing["id"], tq, round(bc,4), existing.get("notes",""))
                                 else:
-                                    db.add_holding(symbol, shares, strike, close_d,
-                                                   notes=f"Assigned/exercised from options trade")
+                                    db.add_holding(symbol, shares, strike, close_d, notes="Assigned from options")
                             else:
-                                # Remove shares — reduce or delete existing holding
-                                holdings = db.get_holdings()
-                                h = next((x for x in holdings if x["symbol"] == symbol), None)
-                                if h:
-                                    new_qty = h["quantity"] - shares
-                                    if new_qty <= 0:
-                                        db.delete_holding(h["id"])
+                                if existing:
+                                    nq = existing["quantity"] - shares
+                                    if nq <= 0:
+                                        db.delete_holding(existing["id"])
                                     else:
-                                        db.update_holding(h["id"], new_qty, h["cost_price"], h.get("notes", ""))
-                                    # Log as equity exit — sold at strike price
-                                    exit_pnl = (strike - h["cost_price"]) * shares
-                                    db.add_equity_trade(symbol, shares, h["cost_price"], strike,
-                                                        round(exit_pnl, 2), close_d,
-                                                        notes=f"Exercise: {direction} {t_type}")
-
-                st.success("Outcome recorded.")
-                _clear_db_cache()
-                st.rerun()
+                                        db.update_holding(existing["id"], nq, existing["cost_price"], existing.get("notes",""))
+                                    db.add_equity_trade(symbol, shares, existing["cost_price"], strike,
+                                                        round((strike-existing["cost_price"])*shares,2),
+                                                        close_d, notes=f"Exercise: {direction} {t_type}")
+                    st.success("Outcome recorded.")
+                    _clear_db_cache()
+                    st.rerun(scope="app")
 
     # ── Trade History ─────────────────────────────────────
+    all_trades = _get_trades()
     if all_trades:
         st.divider()
-        closed_trades = [t for t in all_trades if t["status"] != "open"]
-        with st.expander(f"📋 Trade History ({len(closed_trades)} closed trades)"):
-            if closed_trades:
+        closed = [t for t in all_trades if t["status"] != "open"]
+        with st.expander(f"Trade History ({len(closed)} closed)"):
+            if closed:
                 fc1, fc2 = st.columns(2)
-                type_filter = fc1.selectbox("Type", ["all", "call", "put"], key="hist_type")
-                month_options = sorted(
-                    set(datetime.strptime(t["trade_date"], "%Y-%m-%d").strftime("%Y-%m") for t in closed_trades),
-                    reverse=True
-                )
-                month_filter = fc2.selectbox("Month", ["all"] + month_options, key="hist_month")
-
-                filtered = closed_trades
-                if type_filter != "all":
-                    filtered = [t for t in filtered if t["trade_type"] == type_filter]
-                if month_filter != "all":
-                    filtered = [t for t in filtered
-                                if datetime.strptime(t["trade_date"], "%Y-%m-%d").strftime("%Y-%m") == month_filter]
-
+                tf = fc1.selectbox("Type", ["all","call","put"], key="hist_type")
+                mo = sorted(set(datetime.strptime(t["trade_date"],"%Y-%m-%d").strftime("%Y-%m")
+                                for t in closed), reverse=True)
+                mf = fc2.selectbox("Month", ["all"]+mo, key="hist_month")
+                filtered = [t for t in closed
+                            if (tf=="all" or t["trade_type"]==tf)
+                            and (mf=="all" or datetime.strptime(t["trade_date"],"%Y-%m-%d").strftime("%Y-%m")==mf)]
                 hist_rows = []
                 for t in filtered:
-                    premium_total = t["premium_received"] * t["quantity"] * t["lot_size"]
                     pnl, _ = calc.trade_pnl(t["premium_received"], t.get("close_price") or 0,
-                                            t["quantity"], t["lot_size"],
-                                            direction=t.get("direction", "sell"))
+                                            t["quantity"], t["lot_size"], direction=t.get("direction","sell"))
                     hist_rows.append({
-                        "Symbol": t["symbol"],
-                        "Direction": (t.get("direction") or "sell").upper(),
-                        "Type": t["trade_type"].upper(),
-                        "Strike (₹)": round(t["strike_price"]),
-                        "Expiry": t["expiry_date"],
-                        "Premium (₹)": round(t["premium_received"], 1),
-                        "Total Premium (₹)": round(premium_total),
-                        "Outcome": t["status"].capitalize(),
-                        "Close Price (₹)": round(t.get("close_price"), 1) if t.get("close_price") else None,
+                        "Symbol":           t["symbol"],
+                        "Dir":              (t.get("direction") or "sell").upper(),
+                        "Type":             t["trade_type"].upper(),
+                        "Strike (₹)":       round(t["strike_price"]),
+                        "Expiry":           t["expiry_date"],
+                        "Premium (₹)":      round(t["premium_received"],1),
+                        "Total (₹)":        round(t["premium_received"]*t["quantity"]*t["lot_size"]),
+                        "Outcome":          t["status"].capitalize(),
+                        "Close Price (₹)":  round(t["close_price"],1) if t.get("close_price") else None,
                         "Realised P&L (₹)": round(pnl),
-                        "Close Date": t.get("close_date") or "—",
                     })
-
-                st.dataframe(
-                    style_pnl_df(pd.DataFrame(hist_rows), "Realised P&L (₹)"),
-                    use_container_width=True, hide_index=True,
-                    column_config={
-                        "Strike (₹)": st.column_config.NumberColumn(format="%.0f"),
-                        "Premium (₹)": st.column_config.NumberColumn(format="%.1f"),
-                        "Total Premium (₹)": st.column_config.NumberColumn(format="%.0f"),
-                        "Close Price (₹)": st.column_config.NumberColumn(format="%.1f"),
-                        "Realised P&L (₹)": st.column_config.NumberColumn(format="%.0f"),
-                    },
-                )
+                st.dataframe(style_pnl_df(pd.DataFrame(hist_rows),"Realised P&L (₹)"),
+                             use_container_width=True, hide_index=True,
+                             column_config={
+                                 "Strike (₹)":       st.column_config.NumberColumn(format="%.0f"),
+                                 "Premium (₹)":      st.column_config.NumberColumn(format="%.1f"),
+                                 "Total (₹)":        st.column_config.NumberColumn(format="%.0f"),
+                                 "Close Price (₹)":  st.column_config.NumberColumn(format="%.1f"),
+                                 "Realised P&L (₹)": st.column_config.NumberColumn(format="%.0f"),
+                             })
             else:
                 st.info("No closed trades yet.")
 
-            with st.expander("🗑️ Delete a Trade"):
-                del_opts = {f"{t['symbol']} {t['trade_type'].upper()} {t['strike_price']} (ID {t['id']})": t["id"]
-                            for t in all_trades}
-                sel_del = st.selectbox("Select trade to delete", list(del_opts.keys()))
-                if st.button("Delete Trade"):
-                    db.delete_trade(del_opts[sel_del])
-                    st.success("Deleted.")
-                    _clear_db_cache()
-                    st.rerun()
+        with st.expander("🗑️ Delete a Trade"):
+            del_opts = {f"{t['symbol']} {t['trade_type'].upper()} {t['strike_price']} (ID {t['id']})": t["id"]
+                        for t in all_trades}
+            sel_del  = st.selectbox("Select", list(del_opts.keys()), key="del_trade_sel")
+            if st.button("Delete Trade", key="del_trade_btn"):
+                db.delete_trade(del_opts[sel_del])
+                st.success("Deleted.")
+                _clear_db_cache()
+                st.rerun(scope="app")
 
-        # ── Monthly Summary ───────────────────────────────
         st.divider()
         section_label("Monthly Summary")
         summary = calc.monthly_summary(all_trades)
         if summary:
-            st.dataframe(
-                style_pnl_df(pd.DataFrame(summary), "Realised P&L (₹)"),
-                use_container_width=True, hide_index=True,
-            )
+            st.dataframe(style_pnl_df(pd.DataFrame(summary),"Realised P&L (₹)"),
+                         use_container_width=True, hide_index=True)
 
 
 # ══════════════════════════════════════════════════════════
 # TAB 2 — RISK MONITOR
 # ══════════════════════════════════════════════════════════
 
-with tab2:
+@st.fragment
+def _render_tab2():
     section_label("Risk Monitor")
-    section_heading("Open positions — live risk view")
+    st.markdown("### Open positions — live risk view")
 
     with st.expander("⚙️ Alert Settings"):
-        settings = db.get_alert_settings()
+        settings = _get_alert_settings()
         with st.form("alert_settings_form"):
-            a_email = st.text_input("Alert Email", value=settings.get("email", ""))
+            a_email     = st.text_input("Alert Email", value=settings.get("email",""))
             a_threshold = st.slider("Risk Threshold (%)", 0.5, 10.0,
-                                    float(settings.get("risk_threshold_pct", 2.0)), 0.5)
-            a_days = st.number_input("Alert when expiry within N days", 1, 30,
-                                     int(settings.get("days_to_expiry_alert", 5)))
-            a_enabled = st.checkbox("Enable email alerts", value=bool(settings.get("alerts_enabled", 1)))
+                                    float(settings.get("risk_threshold_pct",2.0)), 0.5)
+            a_days      = st.number_input("Alert when expiry within N days", 1, 30,
+                                          int(settings.get("days_to_expiry_alert",5)))
+            a_enabled   = st.checkbox("Enable email alerts",
+                                      value=bool(settings.get("alerts_enabled",1)))
             if st.form_submit_button("Save Settings"):
                 db.save_alert_settings(a_email, a_threshold, a_days, a_enabled)
                 st.success("Settings saved.")
+                _clear_db_cache()
 
         if st.button("Send Test Email"):
-            saved = db.get_alert_settings()
-            ok, msg = send_email(
-                saved.get("email", ""),
-                "Options Tracker — Test Alert",
-                "<h3>This is a test alert from Options Tracker.</h3>"
-            )
+            settings = _get_alert_settings()
+            ok, msg = send_email(settings.get("email",""),
+                                 "Options Tracker — Test Alert",
+                                 "<h3>Test alert from Options Tracker.</h3>")
             st.success(msg) if ok else st.error(msg)
 
-    open_trades = _get_trades(status="open")
-
-    if not open_trades:
+    open_trades_r = _get_trades(status="open")
+    if not open_trades_r:
         st.info("No open trades to monitor.")
+        return
+
+    threshold  = float(_get_alert_settings().get("risk_threshold_pct",2.0))
+    days_alert = int(_get_alert_settings().get("days_to_expiry_alert",5))
+
+    if st.button("🔄 Refresh Risk Monitor", key="refresh_risk"):
+        with st.spinner("Fetching live data..."):
+            _tok        = st.session_state.get("upstox_token")
+            syms        = list(set(t["symbol"] for t in open_trades_r))
+            prices_live = market.get_multiple_stock_prices(syms)
+            risk_rows   = []
+            at_risk     = []
+            tot_prem    = tot_pnl = 0
+            for t in open_trades_r:
+                spot = prices_live.get(t["symbol"])
+                ar, dist     = calc.is_at_risk(t, spot, threshold)
+                _, days_left = calc.is_expiry_near(t["expiry_date"], days_alert)
+                cur_prem     = (upstox.get_option_premium(t["symbol"],t["strike_price"],
+                                t["expiry_date"],t["trade_type"],_tok) if _tok
+                               else market.get_option_premium(t["symbol"],t["strike_price"],
+                                t["expiry_date"],t["trade_type"]))
+                pnl_amt, pnl_pct = calc.trade_pnl(t["premium_received"], cur_prem or 0,
+                                                   t["quantity"], t["lot_size"],
+                                                   direction=t.get("direction","sell"))
+                tot_prem += t["premium_received"]*t["quantity"]*t["lot_size"]
+                tot_pnl  += pnl_amt
+                flags     = (["Near Strike"] if ar else []) + \
+                            ([f"Expiry {days_left}d"] if calc.is_expiry_near(t["expiry_date"],days_alert)[0] else [])
+                risk_rows.append({
+                    "Symbol":          t["symbol"],
+                    "Type":            t["trade_type"].upper(),
+                    "Strike (₹)":      round(t["strike_price"]),
+                    "Spot (₹)":        round(spot) if spot else None,
+                    "Distance %":      f"{dist:.0f}%" if dist is not None else "—",
+                    "Cur Premium (₹)": round(cur_prem,1) if cur_prem else None,
+                    "P&L (₹)":         round(pnl_amt),
+                    "P&L %":           f"{pnl_pct:+.0f}%",
+                    "Expiry":          t["expiry_date"],
+                    "Days Left":       days_left,
+                    "Risk":            ", ".join(flags) if flags else "OK",
+                })
+                if ar and spot:
+                    at_risk.append({**t, "spot_price":spot, "distance_pct":dist})
+            st.session_state["risk_rows"]    = risk_rows
+            st.session_state["at_risk_list"] = at_risk
+            st.session_state["risk_totals"]  = (tot_prem, tot_pnl)
+
+    if "risk_rows" not in st.session_state:
+        st.info("Click **Refresh Risk Monitor** to load live prices and current premiums.")
     else:
-        settings = db.get_alert_settings()
-        threshold = float(settings.get("risk_threshold_pct", 2.0))
-        days_alert = int(settings.get("days_to_expiry_alert", 5))
+        risk_rows = st.session_state["risk_rows"]
+        at_risk   = st.session_state["at_risk_list"]
+        tot_prem, tot_pnl = st.session_state["risk_totals"]
 
-        if st.button("🔄 Refresh Risk Monitor", key="refresh_risk"):
-            _fetch_prices.clear()
-            st.rerun()
-
-        symbols = list(set(t["symbol"] for t in open_trades))
-        prices = _fetch_prices(tuple(sorted(symbols)))
-
-        risk_rows = []
-        at_risk_list = []
-        total_open_premium = 0
-        total_pnl_open = 0
-
-        for t in open_trades:
-            spot = prices.get(t["symbol"])
-            at_risk, dist_pct = calc.is_at_risk(t, spot, threshold)
-            expiry_near, days_left = calc.is_expiry_near(t["expiry_date"], days_alert)
-            _tok = st.session_state.get("upstox_token")
-            if _tok:
-                cur_premium = upstox.get_option_premium(
-                    t["symbol"], t["strike_price"], t["expiry_date"], t["trade_type"], _tok
-                )
-            else:
-                cur_premium = market.get_option_premium(
-                    t["symbol"], t["strike_price"], t["expiry_date"], t["trade_type"]
-                )
-            pnl_amt, pnl_pct = calc.trade_pnl(
-                t["premium_received"], cur_premium or 0, t["quantity"], t["lot_size"],
-                direction=t.get("direction", "sell")
-            )
-            total_open_premium += t["premium_received"] * t["quantity"] * t["lot_size"]
-            total_pnl_open += pnl_amt
-
-            risk_flag = []
-            if at_risk:
-                risk_flag.append("Near Strike")
-            if expiry_near:
-                risk_flag.append(f"Expiry in {days_left}d")
-
-            risk_rows.append({
-                "Symbol": t["symbol"],
-                "Type": t["trade_type"].upper(),
-                "Strike (₹)": round(t["strike_price"]),
-                "Spot (₹)": round(spot) if spot else None,
-                "Distance %": f"{dist_pct:.0f}%" if dist_pct is not None else "—",
-                "Current Premium (₹)": round(cur_premium, 1) if cur_premium else None,
-                "P&L (₹)": round(pnl_amt),
-                "P&L %": f"{pnl_pct:+.0f}%",
-                "Expiry": t["expiry_date"],
-                "Days Left": days_left,
-                "Risk": ", ".join(risk_flag) if risk_flag else "OK",
-            })
-
-            if at_risk and spot:
-                at_risk_list.append({**t, "spot_price": spot, "distance_pct": dist_pct})
-
-        # Hero bar for open positions
         hero_bar([
-            ("Open Positions", str(len(open_trades)), "#FFFFFF"),
-            ("Premium Received", fmt_inr(total_open_premium), "#FFFFFF"),
-            ("Unrealised P&L", fmt_inr(total_pnl_open), "#16A34A" if total_pnl_open >= 0 else "#DC2626"),
-            ("At Risk", str(len(at_risk_list)), "#DC2626" if at_risk_list else "#16A34A"),
+            ("Open Positions",  str(len(open_trades_r)), "#111827"),
+            ("Premium Received",fmt_inr(tot_prem),       "#111827"),
+            ("Unrealised P&L",  fmt_inr(tot_pnl),        pnl_color(tot_pnl)),
+            ("At Risk",         str(len(at_risk)),
+             "#DC2626" if at_risk else "#16A34A"),
         ])
 
-        df_risk = pd.DataFrame(risk_rows)
-
-        def highlight_risk(row):
-            risk = str(row.get("Risk", ""))
-            if "Near Strike" in risk:
-                return ["background-color:#FEF2F2"] * len(row)
-            elif "Expiry" in risk:
-                return ["background-color:#FFFBEB"] * len(row)
-            return [""] * len(row)
+        def _hl(row):
+            r = str(row.get("Risk",""))
+            if "Near Strike" in r: return ["background-color:#FEF2F2"]*len(row)
+            if "Expiry"      in r: return ["background-color:#FFFBEB"]*len(row)
+            return [""]*len(row)
 
         st.dataframe(
-            style_pnl_df(df_risk, "P&L (₹)", "P&L %").apply(highlight_risk, axis=1),
-            use_container_width=True,
-            hide_index=True,
+            style_pnl_df(pd.DataFrame(risk_rows),"P&L (₹)","P&L %").apply(_hl, axis=1),
+            use_container_width=True, hide_index=True,
             column_config={
-                "Strike (₹)": st.column_config.NumberColumn(format="%.0f"),
-                "Spot (₹)": st.column_config.NumberColumn(format="%.0f"),
-                "Current Premium (₹)": st.column_config.NumberColumn(format="%.1f"),
-                "P&L (₹)": st.column_config.NumberColumn(format="%.0f"),
-            },
-        )
+                "Strike (₹)":      st.column_config.NumberColumn(format="%.0f"),
+                "Spot (₹)":        st.column_config.NumberColumn(format="%.0f"),
+                "Cur Premium (₹)": st.column_config.NumberColumn(format="%.1f"),
+                "P&L (₹)":         st.column_config.NumberColumn(format="%.0f"),
+            })
 
-        if at_risk_list:
-            st.error(f"⚠️ {len(at_risk_list)} position(s) at risk — spot is near strike")
+        if at_risk:
+            st.error(f"⚠️ {len(at_risk)} position(s) at risk")
             if st.button("Send Risk Alert Email"):
-                saved = db.get_alert_settings()
-                html = build_risk_alert_email(at_risk_list)
-                ok, msg = send_email(saved.get("email", ""), "⚠️ Options Tracker — Positions at Risk", html)
+                ok, msg = send_email(_get_alert_settings().get("email",""),
+                                     "⚠️ Options Tracker — Positions at Risk",
+                                     build_risk_alert_email(at_risk))
                 st.success(msg) if ok else st.error(msg)
         else:
             st.success("All positions are safe.")
-
 
 
 # ══════════════════════════════════════════════════════════
 # TAB 3 — OPTIONS SCREENER
 # ══════════════════════════════════════════════════════════
 
-with tab3:
+@st.fragment
+def _render_tab3():
     section_label("Options Screener")
-    section_heading("Options Screener")
+    st.markdown("### Options Screener")
 
-    # ── Watchlist Management ──────────────────────────────
-    watchlist = db.get_watchlist()
+    watchlist = _get_watchlist()
     with st.expander(f"⭐ Manage Watchlist ({len(watchlist)} stocks)"):
-        wl_col1, wl_col2 = st.columns(2)
-        with wl_col1:
-            known_symbols = sorted(upstox.INSTRUMENT_KEYS.keys())
-            with st.form("form_add_watchlist", clear_on_submit=True):
-                new_wl = st.selectbox("Add symbol", [""] + known_symbols)
+        wc1, wc2 = st.columns(2)
+        with wc1:
+            with st.form("form_add_wl", clear_on_submit=True):
+                new_wl = st.selectbox("Add symbol", [""] + sorted(upstox.INSTRUMENT_KEYS.keys()))
                 if st.form_submit_button("Add") and new_wl:
                     db.add_to_watchlist(new_wl)
                     _clear_db_cache()
-                    st.rerun()
+                    st.rerun(scope="app")
         if watchlist:
-            with wl_col2:
-                rem = st.selectbox("Remove", watchlist)
-                if st.button("Remove"):
+            with wc2:
+                rem = st.selectbox("Remove", watchlist, key="wl_remove")
+                if st.button("Remove", key="wl_remove_btn"):
                     db.remove_from_watchlist(rem)
                     _clear_db_cache()
-                    st.rerun()
+                    st.rerun(scope="app")
 
-    # ── Watchlist Data (auto-loads) ───────────────────────
     section_label("Watchlist")
-
     if not watchlist:
-        st.info("Add stocks to your watchlist above to see live premiums here.")
+        st.info("Add stocks to your watchlist above.")
     else:
-        _tok = st.session_state.get("upstox_token")
+        _tok_wl    = st.session_state.get("upstox_token")
         wl_refresh = st.button("🔄 Refresh Watchlist", key="wl_refresh")
-
-        if wl_refresh or "wl_data" not in st.session_state or st.session_state.get("wl_symbols") != watchlist:
+        if wl_refresh:
             with st.spinner("Fetching watchlist premiums..."):
                 wl_results = []
                 for sym in watchlist:
-                    data = upstox.get_atm_premiums(sym, _tok) if _tok else market.get_atm_premiums(sym)
-                    if data:
+                    d = upstox.get_atm_premiums(sym,_tok_wl) if _tok_wl else market.get_atm_premiums(sym)
+                    if d:
                         wl_results.append({
-                            "Symbol": data["symbol"],
-                            "Spot (₹)": data["spot_price"],
-                            "ATM Strike": data["atm_strike"],
-                            "Call Premium (₹)": data["call_premium"] or "—",
-                            "Put Premium (₹)": data["put_premium"] or "—",
-                            "Call %": data["call_pct"] or 0,
-                            "Put %": data["put_pct"] or 0,
-                            "Expiry": data["expiry_date"],
+                            "Symbol":          d["symbol"],
+                            "Spot (₹)":        d["spot_price"],
+                            "ATM Strike":      d["atm_strike"],
+                            "Call Premium (₹)":d["call_premium"] or "—",
+                            "Put Premium (₹)": d["put_premium"]  or "—",
+                            "Call %":          d["call_pct"] or 0,
+                            "Put %":           d["put_pct"]  or 0,
+                            "Expiry":          d["expiry_date"],
                         })
-                st.session_state.wl_data = wl_results
-                st.session_state.wl_symbols = watchlist
+                st.session_state["wl_data"] = wl_results
 
-        wl_results = st.session_state.get("wl_data", [])
-        if wl_results:
-            df_wl = pd.DataFrame(wl_results).sort_values("Call %", ascending=False)
-            st.dataframe(df_wl, use_container_width=True, hide_index=True)
+        if st.session_state.get("wl_data"):
+            st.dataframe(pd.DataFrame(st.session_state["wl_data"]).sort_values("Call %",ascending=False),
+                         use_container_width=True, hide_index=True)
         else:
-            st.warning("No data returned. Connect Upstox or check market hours.")
+            st.info("Click **Refresh Watchlist** to load live premiums.")
 
     st.divider()
-
-    # ── Full F&O Screener ─────────────────────────────────
     section_label("Full F&O Scan")
-
-    sc1, sc2, sc3, sc4 = st.columns([1, 1, 1, 1])
-    min_call_pct = sc1.number_input("Min Call % of Spot", 0.0, 10.0, 0.0, 0.25)
-    min_put_pct = sc2.number_input("Min Put % of Spot", 0.0, 10.0, 0.0, 0.25)
-    run_screener = sc4.button("🔄 Scan All F&O Stocks", use_container_width=True)
-
-    if run_screener:
-        fo_stocks = sorted(upstox.INSTRUMENT_KEYS.keys())
-
-        if fo_stocks:
-            results = []
-            progress = st.progress(0, text="Fetching option chains...")
-            total = len(fo_stocks)
-
-            _tok = st.session_state.get("upstox_token")
-            for i, sym in enumerate(fo_stocks):
-                progress.progress((i + 1) / total, text=f"Fetching {sym} ({i+1}/{total})...")
-                data = upstox.get_atm_premiums(sym, _tok) if _tok else market.get_atm_premiums(sym)
-                if data:
-                    results.append({
-                        "Symbol": data["symbol"],
-                        "Spot (₹)": data["spot_price"],
-                        "ATM Strike": data["atm_strike"],
-                        "Call Premium (₹)": data["call_premium"] or "—",
-                        "Put Premium (₹)": data["put_premium"] or "—",
-                        "Call %": data["call_pct"] or 0,
-                        "Put %": data["put_pct"] or 0,
-                        "Expiry": data["expiry_date"],
-                    })
-                time.sleep(0.4)
-
-            progress.empty()
-
-            if results:
-                df_screen = pd.DataFrame(results)
-
-                if min_call_pct > 0:
-                    df_screen = df_screen[df_screen["Call %"] >= min_call_pct]
-                if min_put_pct > 0:
-                    df_screen = df_screen[df_screen["Put %"] >= min_put_pct]
-
-                df_screen = df_screen.sort_values("Call %", ascending=False)
-                top_call = df_screen["Call %"].max()
-                top_put = df_screen["Put %"].max()
-
-                wl_set = set(db.get_watchlist())
-                df_screen["Watchlist"] = df_screen["Symbol"].apply(lambda s: "⭐" if s in wl_set else "")
-
-                hero_bar([
-                    ("Stocks Scanned", str(total), "#FFFFFF"),
-                    ("Results Shown", str(len(df_screen)), "#FFFFFF"),
-                    ("Top Call %", f"{top_call:.1f}%", "#16A34A"),
-                    ("Top Put %", f"{top_put:.1f}%", "#16A34A"),
-                ])
-
-                st.dataframe(df_screen, use_container_width=True, hide_index=True)
-
-                add_wl_sym = st.selectbox("Add to watchlist from results",
-                                          ["—"] + df_screen["Symbol"].tolist())
-                if add_wl_sym != "—" and st.button("Add to Watchlist"):
-                    db.add_to_watchlist(add_wl_sym)
-                    st.success(f"{add_wl_sym} added to watchlist.")
-                    _clear_db_cache()
-                    st.rerun()
-            else:
-                st.warning("No data returned. Connect Upstox or check market hours.")
+    sc1, sc2, _, sc4 = st.columns(4)
+    min_call = sc1.number_input("Min Call %", 0.0, 10.0, 0.0, 0.25)
+    min_put  = sc2.number_input("Min Put %",  0.0, 10.0, 0.0, 0.25)
+    if sc4.button("🔄 Scan All F&O Stocks", use_container_width=True):
+        fo      = sorted(upstox.INSTRUMENT_KEYS.keys())
+        prog    = st.progress(0)
+        _tok_sc = st.session_state.get("upstox_token")
+        res     = []
+        for i, sym in enumerate(fo):
+            prog.progress((i+1)/len(fo), text=f"{sym} ({i+1}/{len(fo)})")
+            d = upstox.get_atm_premiums(sym,_tok_sc) if _tok_sc else market.get_atm_premiums(sym)
+            if d:
+                res.append({"Symbol":d["symbol"],"Spot (₹)":d["spot_price"],
+                            "ATM Strike":d["atm_strike"],
+                            "Call Premium (₹)":d["call_premium"] or "—",
+                            "Put Premium (₹)":d["put_premium"] or "—",
+                            "Call %":d["call_pct"] or 0,"Put %":d["put_pct"] or 0,
+                            "Expiry":d["expiry_date"]})
+            time.sleep(0.4)
+        prog.empty()
+        if res:
+            watchlist_set = set(_get_watchlist())
+            df_sc = pd.DataFrame(res)
+            if min_call > 0: df_sc = df_sc[df_sc["Call %"] >= min_call]
+            if min_put  > 0: df_sc = df_sc[df_sc["Put %"]  >= min_put]
+            df_sc = df_sc.sort_values("Call %", ascending=False)
+            df_sc["WL"] = df_sc["Symbol"].apply(lambda s: "⭐" if s in watchlist_set else "")
+            hero_bar([("Scanned",str(len(fo)),"#111827"),("Shown",str(len(df_sc)),"#111827"),
+                      ("Top Call %",f"{df_sc['Call %'].max():.1f}%","#16A34A"),
+                      ("Top Put %", f"{df_sc['Put %'].max():.1f}%", "#16A34A")])
+            st.dataframe(df_sc, use_container_width=True, hide_index=True)
+        else:
+            st.warning("No data returned.")
     else:
-        _render_html("""
-        <div style="background:#F9FAFB;border:1px solid #E5E7EB;border-left:3px solid #2563EB;
-                    border-radius:0 4px 4px 0;padding:12px 16px;">
-            <span style="font-family:'JetBrains Mono',monospace;font-size:13px;color:#6B7280;">
-                Click <strong>Scan All F&amp;O Stocks</strong> to fetch premiums for all ~180 NSE F&amp;O stocks.
-                Takes ~2–3 minutes. Requires Upstox login.
-            </span>
-        </div>""")
+        st.info("Click **Scan All F&O Stocks** to fetch premiums for all NSE F&O stocks.")
 
 
 # ══════════════════════════════════════════════════════════
 # TAB 4 — P&L SUMMARY
 # ══════════════════════════════════════════════════════════
 
-with tab4:
+@st.fragment
+def _render_tab4():
     section_label("P&L Summary")
-    section_heading("Realised & unrealised across equity and options")
+    st.markdown("### Realised & unrealised P&L")
 
-    # ── Load data ─────────────────────────────────────────
-    all_trades_summary = _get_trades()
-    holdings_summary = _get_holdings()
-    equity_trades = db.get_equity_trades()
+    all_tr    = _get_trades()
+    holdings4 = _get_holdings()
+    eq_tr     = _get_equity_trades()
+    prices4   = st.session_state.get("prices", {})
 
-    # ── Realised: Options ─────────────────────────────────
-    closed_options = [t for t in all_trades_summary if t["status"] in ("closed", "expired", "exercised")]
-    options_realised = sum(
-        calc.trade_pnl(t["premium_received"], t.get("close_price") or 0,
-                       t["quantity"], t["lot_size"], direction=t.get("direction", "sell"))[0]
-        for t in closed_options
-    )
-    options_premium_collected = sum(
-        t["premium_received"] * t["quantity"] * t["lot_size"]
-        for t in all_trades_summary if t.get("direction", "sell") == "sell"
-    )
+    closed_opts   = [t for t in all_tr if t["status"] in ("closed","expired","exercised")]
+    opts_realised = sum(calc.trade_pnl(t["premium_received"],t.get("close_price") or 0,
+                                       t["quantity"],t["lot_size"],
+                                       direction=t.get("direction","sell"))[0] for t in closed_opts)
+    opts_premium  = sum(t["premium_received"]*t["quantity"]*t["lot_size"]
+                        for t in all_tr if t.get("direction","sell")=="sell")
+    eq_realised   = sum(t["pnl"] for t in eq_tr) if eq_tr else 0
 
-    # ── Realised: Equity exits ────────────────────────────
-    equity_realised = sum(t["pnl"] for t in equity_trades) if equity_trades else 0
-
-    # ── Unrealised: Holdings ──────────────────────────────
-    holding_symbols = list(set(h["symbol"] for h in holdings_summary))
-    if holding_symbols:
-        live_prices = _fetch_prices(tuple(sorted(holding_symbols)))
-    else:
-        live_prices = {}
-
-    equity_unrealised = 0
-    equity_invested = 0
-    for h in holdings_summary:
+    eq_unrealised = eq_invested = 0
+    for h in holdings4:
         cost = h["cost_price"] * h["quantity"]
-        equity_invested += cost
-        cur = live_prices.get(h["symbol"])
-        if cur:
-            equity_unrealised += (cur * h["quantity"]) - cost
+        eq_invested += cost
+        cur = prices4.get(h["symbol"])
+        if cur: eq_unrealised += (cur * h["quantity"]) - cost
 
-    # ── Unrealised: Open options ──────────────────────────
-    open_options = [t for t in all_trades_summary if t["status"] == "open"]
-    options_unrealised = 0
-    _tok = st.session_state.get("upstox_token")
-    for t in open_options:
-        if _tok:
-            cur_p = upstox.get_option_premium(t["symbol"], t["strike_price"], t["expiry_date"], t["trade_type"], _tok)
-        else:
-            cur_p = None
-        pnl_amt, _ = calc.trade_pnl(t["premium_received"], cur_p or 0,
-                                     t["quantity"], t["lot_size"], direction=t.get("direction", "sell"))
-        options_unrealised += pnl_amt
+    opts_unrealised = (st.session_state["risk_totals"][1]
+                       if "risk_totals" in st.session_state
+                       else sum(calc.trade_pnl(t["premium_received"],0,t["quantity"],t["lot_size"],
+                                               direction=t.get("direction","sell"))[0]
+                                for t in all_tr if t["status"]=="open"))
 
-    total_realised = options_realised + equity_realised
-    total_unrealised = equity_unrealised + options_unrealised
+    total_realised   = opts_realised + eq_realised
+    total_unrealised = eq_unrealised + opts_unrealised
 
-    # ── Hero bar ──────────────────────────────────────────
     hero_bar([
-        ("Total Realised P&L", fmt_inr(total_realised), "#16A34A" if total_realised >= 0 else "#DC2626"),
-        ("Total Unrealised P&L", fmt_inr(total_unrealised), "#16A34A" if total_unrealised >= 0 else "#DC2626"),
-        ("Options Premium Collected", fmt_inr(options_premium_collected), "#FFFFFF"),
-        ("Equity Invested", fmt_inr(equity_invested), "#FFFFFF"),
+        ("Total Realised P&L",        fmt_inr(total_realised),   pnl_color(total_realised)),
+        ("Total Unrealised P&L",      fmt_inr(total_unrealised), pnl_color(total_unrealised)),
+        ("Options Premium Collected", fmt_inr(opts_premium),     "#111827"),
+        ("Equity Invested",           fmt_inr(eq_invested),      "#111827"),
     ])
 
-    # ── Realised breakdown ────────────────────────────────
     section_label("Realised Breakdown")
-    r_col1, r_col2 = st.columns(2)
-    r_col1.metric("Options P&L (closed/expired/exercised)", fmt_inr(options_realised),
-                  delta=f"{options_realised:+,.0f}")
-    r_col2.metric("Equity exits P&L", fmt_inr(equity_realised),
-                  delta=f"{equity_realised:+,.0f}")
+    r1, r2 = st.columns(2)
+    r1.metric("Options (closed/expired/exercised)", fmt_inr(opts_realised),
+              delta=f"{opts_realised:+,.0f}")
+    r2.metric("Equity exits", fmt_inr(eq_realised),
+              delta=f"{eq_realised:+,.0f}")
 
-    # ── Equity trade history ──────────────────────────────
-    if equity_trades:
+    if eq_tr:
         st.divider()
         section_label("Equity Trade History")
-        eq_rows = [{
-            "Symbol": t["symbol"],
-            "Qty": t["quantity"],
-            "Buy Price (₹)": round(t["buy_price"]),
-            "Sell Price (₹)": round(t["sell_price"]),
+        st.dataframe(style_pnl_df(pd.DataFrame([{
+            "Symbol":  t["symbol"],
+            "Qty":     t["quantity"],
+            "Buy (₹)": round(t["buy_price"]),
+            "Sell (₹)":round(t["sell_price"]),
             "P&L (₹)": round(t["pnl"]),
-            "P&L %": f"{(t['pnl'] / (t['buy_price'] * t['quantity']) * 100):+.0f}%" if t["buy_price"] and t["quantity"] else "—",
-            "Date": t["trade_date"],
-            "Notes": t.get("notes", ""),
-        } for t in equity_trades]
-        st.dataframe(
-            style_pnl_df(pd.DataFrame(eq_rows), "P&L (₹)", "P&L %"),
-            use_container_width=True, hide_index=True,
-            column_config={
-                "Buy Price (₹)": st.column_config.NumberColumn(format="%.0f"),
-                "Sell Price (₹)": st.column_config.NumberColumn(format="%.0f"),
-                "P&L (₹)": st.column_config.NumberColumn(format="%.0f"),
-            },
-        )
+            "P&L %":   f"{(t['pnl']/(t['buy_price']*t['quantity'])*100):+.1f}%"
+                       if t["buy_price"] and t["quantity"] else "—",
+            "Date":    t["trade_date"],
+        } for t in eq_tr]),"P&L (₹)","P&L %"),
+        use_container_width=True, hide_index=True)
     else:
-        st.info("No equity exits recorded yet. Use 'Record Exit / Sell' in the Portfolio tab.")
+        st.info("No equity exits yet. Use 'Record Exit / Sell' in the Portfolio tab.")
 
-    # ── Unrealised breakdown ──────────────────────────────
     st.divider()
     section_label("Unrealised Breakdown")
-    u_col1, u_col2 = st.columns(2)
-    u_col1.metric("Equity holdings (mark-to-market)", fmt_inr(equity_unrealised),
-                  delta=f"{equity_unrealised:+,.0f}")
-    u_col2.metric("Open options (mark-to-market)", fmt_inr(options_unrealised),
-                  delta=f"{options_unrealised:+,.0f}",
-                  help="Requires Upstox login for live option premiums.")
+    u1, u2 = st.columns(2)
+    u1.metric("Equity holdings (MTM)", fmt_inr(eq_unrealised),
+              delta=f"{eq_unrealised:+,.0f}",
+              help="Refresh Prices in Portfolio tab for live values.")
+    u2.metric("Open options (MTM)", fmt_inr(opts_unrealised),
+              delta=f"{opts_unrealised:+,.0f}",
+              help="Refresh Risk Monitor (Tab 2) for live values.")
 
-    # ── Options monthly summary ───────────────────────────
-    if all_trades_summary:
+    if all_tr:
         st.divider()
         section_label("Options — Monthly Breakdown")
-        summary = calc.monthly_summary(all_trades_summary)
+        summary = calc.monthly_summary(all_tr)
         if summary:
-            st.dataframe(
-                style_pnl_df(pd.DataFrame(summary), "Realised P&L (₹)"),
-                use_container_width=True, hide_index=True,
-            )
+            st.dataframe(style_pnl_df(pd.DataFrame(summary),"Realised P&L (₹)"),
+                         use_container_width=True, hide_index=True)
+
+
+# ── Render Tabs ───────────────────────────────────────────
+
+with tab1:
+    _render_tab1()
+
+with tab2:
+    _render_tab2()
+
+with tab3:
+    _render_tab3()
+
+with tab4:
+    _render_tab4()
