@@ -36,8 +36,10 @@ if "code" in _params and "upstox_token" not in st.session_state:
 
 if not st.session_state.get("authenticated"):
     st.title("Options Tracker")
-    pwd = st.text_input("Password", type="password")
-    if st.button("Login"):
+    with st.form("login_form"):
+        pwd = st.text_input("Password", type="password")
+        submitted = st.form_submit_button("Login")
+    if submitted:
         from modules.config import get as _cfg
         if pwd == _cfg("APP_PASSWORD", ""):
             st.session_state.authenticated = True
