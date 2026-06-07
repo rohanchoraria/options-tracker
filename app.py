@@ -114,14 +114,18 @@ html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
 
 def hero_bar(metrics):
     cols = st.columns(len(metrics))
-    for col, (label, value, color) in zip(cols, metrics):
+    for col, metric in zip(cols, metrics):
+        label, value, color = metric[0], metric[1], metric[2]
+        subtitle = metric[3] if len(metric) > 3 else None
         col.markdown(
             f'<div style="padding:4px 0 16px 0;">'
             f'<div style="font-family:monospace;font-size:11px;font-weight:500;'
             f'letter-spacing:0.08em;text-transform:uppercase;color:#9CA3AF;margin-bottom:4px;">{label}</div>'
             f'<div style="font-family:monospace;font-size:26px;font-weight:700;'
             f'color:{color};line-height:1.1;">{value}</div>'
-            f'</div>',
+            + (f'<div style="font-family:monospace;font-size:13px;font-weight:500;'
+               f'color:{color};margin-top:3px;">{subtitle}</div>' if subtitle else '')
+            + f'</div>',
             unsafe_allow_html=True,
         )
 
@@ -864,10 +868,15 @@ def _render_tab4():
     total_realised   = opts_realised + eq_realised
     total_unrealised = eq_unrealised + opts_unrealised
 
+    def _pct_of_invested(v):
+        if eq_invested and eq_invested > 0:
+            return f"({v / eq_invested * 100:+.2f}% of invested)"
+        return ""
+
     hero_bar([
-        ("Total Realised P&L",        fmt_inr(total_realised),   pnl_color(total_realised)),
-        ("Total Unrealised P&L",      fmt_inr(total_unrealised), pnl_color(total_unrealised)),
-        ("Options Premium Collected", fmt_inr(opts_premium),     "#111827"),
+        ("Total Realised P&L",        fmt_inr(total_realised),   pnl_color(total_realised),  _pct_of_invested(total_realised)),
+        ("Total Unrealised P&L",      fmt_inr(total_unrealised), pnl_color(total_unrealised), _pct_of_invested(total_unrealised)),
+        ("Options Premium Collected", fmt_inr(opts_premium),     "#111827",                   _pct_of_invested(opts_premium)),
         ("Equity Invested",           fmt_inr(eq_invested),      "#111827"),
     ])
 
