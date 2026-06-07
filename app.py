@@ -471,38 +471,39 @@ def _render_tab1():
 
         with st.expander("Close positions at month end"):
             st.caption("Record outcome: expired worthless · bought back · exercised/assigned")
-            with st.form("form_close_trade"):
-                trade_map  = {t["id"]: t for t in open_trades}
-                trade_opts = {
-                    f"{t.get('direction','sell').upper()} {t['symbol']} {t['trade_type'].upper()} "
-                    f"{t['strike_price']} exp {t['expiry_date']}": t["id"]
-                    for t in open_trades
+            trade_map  = {t["id"]: t for t in open_trades}
+            trade_opts = {
+                f"{t.get('direction','sell').upper()} {t['symbol']} {t['trade_type'].upper()} "
+                f"{t['strike_price']} exp {t['expiry_date']}": t["id"]
+                for t in open_trades
+            }
+            sel_id    = trade_opts[st.selectbox("Select position", list(trade_opts.keys()), key="close_pos_sel")]
+            sel_trade = trade_map[sel_id]
+            direction = sel_trade.get("direction") or "sell"
+            action    = st.radio("Outcome", ["Expired worthless", "Closed / Bought back", "Exercised"],
+                                 horizontal=True, key="close_action")
+
+            close_p = 0.0
+            if action == "Closed / Bought back":
+                close_p = st.number_input("Close Price (₹)", min_value=0.0, format="%.2f", key="close_price_input")
+
+            auto_update = False
+            if action == "Exercised":
+                shares = sel_trade["quantity"] * sel_trade["lot_size"]
+                t_type = sel_trade["trade_type"]
+                symbol = sel_trade["symbol"]
+                strike = sel_trade["strike_price"]
+                msgs   = {
+                    ("sell","call"): f"Shares called away: remove {shares} {symbol} (sold @ ₹{strike})",
+                    ("sell","put"):  f"Shares assigned: add {shares} {symbol} @ ₹{strike}",
+                    ("buy","call"):  f"You exercised: add {shares} {symbol} @ ₹{strike}",
+                    ("buy","put"):   f"You exercised: remove {shares} {symbol} (sold @ ₹{strike})",
                 }
-                sel_id    = trade_opts[st.selectbox("Select position", list(trade_opts.keys()))]
-                sel_trade = trade_map[sel_id]
-                direction = sel_trade.get("direction") or "sell"
-                action    = st.radio("Outcome", ["Expired worthless","Closed / Bought back","Exercised"],
-                                     horizontal=True)
-                close_p   = st.number_input("Close Price (₹)", min_value=0.0, format="%.2f") \
-                            if action == "Closed / Bought back" else 0.0
-                close_d   = st.date_input("Date", value=date.today())
+                st.info(f"Portfolio impact: {msgs.get((direction, t_type), '')}")
+                auto_update = st.checkbox("Auto-update portfolio", value=True, key="close_auto_update")
 
-                if action == "Exercised":
-                    shares = sel_trade["quantity"] * sel_trade["lot_size"]
-                    t_type = sel_trade["trade_type"]
-                    symbol = sel_trade["symbol"]
-                    strike = sel_trade["strike_price"]
-                    msgs   = {
-                        ("sell","call"): f"Shares called away: remove {shares} {symbol} (sold @ ₹{strike})",
-                        ("sell","put"):  f"Shares assigned: add {shares} {symbol} @ ₹{strike}",
-                        ("buy","call"):  f"You exercised: add {shares} {symbol} @ ₹{strike}",
-                        ("buy","put"):   f"You exercised: remove {shares} {symbol} (sold @ ₹{strike})",
-                    }
-                    st.info(f"Portfolio impact: {msgs.get((direction, t_type), '')}")
-                    auto_update = st.checkbox("Auto-update portfolio", value=True)
-                else:
-                    auto_update = False
-
+            with st.form("form_close_trade"):
+                close_d = st.date_input("Date", value=date.today())
                 if st.form_submit_button("Record Outcome"):
                     if action == "Closed / Bought back":
                         db.close_trade(sel_id, close_p, close_d)
