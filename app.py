@@ -322,31 +322,9 @@ def _render_tab1():
 
     st.divider()
 
-    # ── Call Opportunities ────────────────────────────────
-    section_label("Call Opportunities")
-    open_trades = _get_trades(status="open")
-
-    with st.expander("Stocks with no call sold this month", expanded=True):
-        if holdings:
-            opps = calc.get_open_opportunities(holdings, open_trades)
-            if opps:
-                st.warning(f"⚡ {len(opps)} stock(s) with no call sold this month")
-                st.dataframe(pd.DataFrame([{
-                    "Symbol":           h["symbol"],
-                    "Qty Held":         h["quantity"],
-                    "Cost Price (₹)":   round(h["cost_price"]),
-                    "Current Price (₹)":round(prices[h["symbol"]], 2) if prices.get(h["symbol"]) is not None else None,
-                    "Lot Size":         market.get_lot_size(h["symbol"]),
-                } for h in opps]), use_container_width=True, hide_index=True)
-            else:
-                st.success("All holdings have a call sold this month.")
-        else:
-            st.info("Add holdings to track opportunities.")
-
-    st.divider()
-
     # ── Open Positions ────────────────────────────────────
     section_label("Open Positions")
+    open_trades = _get_trades(status="open")
 
     c1, c2 = st.columns(2)
     with c1:
@@ -601,6 +579,27 @@ def _render_tab1():
         if summary:
             st.dataframe(style_pnl_df(pd.DataFrame(summary),"Realised P&L (₹)"),
                          use_container_width=True, hide_index=True)
+
+    st.divider()
+
+    # ── Call Opportunities ────────────────────────────────
+    section_label("Call Opportunities")
+    with st.expander("Stocks with no call sold this month", expanded=True):
+        if holdings:
+            opps = calc.get_open_opportunities(holdings, open_trades)
+            if opps:
+                st.warning(f"⚡ {len(opps)} stock(s) with no call sold this month")
+                st.dataframe(pd.DataFrame([{
+                    "Symbol":           h["symbol"],
+                    "Qty Held":         h["quantity"],
+                    "Cost Price (₹)":   round(h["cost_price"]),
+                    "Current Price (₹)":round(prices[h["symbol"]], 2) if prices.get(h["symbol"]) is not None else None,
+                    "Lot Size":         market.get_lot_size(h["symbol"]),
+                } for h in opps]), use_container_width=True, hide_index=True)
+            else:
+                st.success("All holdings have a call sold this month.")
+        else:
+            st.info("Add holdings to track opportunities.")
 
 
 # ══════════════════════════════════════════════════════════
