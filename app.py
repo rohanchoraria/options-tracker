@@ -402,9 +402,11 @@ def _render_tab1():
                           for t in open_trades if (t.get("direction") or "sell") == "sell")
         op_days     = [calc.is_expiry_near(t["expiry_date"], 999)[1] for t in open_trades]
         nearest_exp = min(op_days) if op_days else None
+        op_prem_pct = (f"({op_premium / total_invested * 100:.2f}% of invested)"
+                       if total_invested > 0 else "")
         hero_bar([
             ("Open Positions",    str(len(open_trades)),   "#111827"),
-            ("Total Premium Recv",fmt_inr(op_premium),     "#16A34A"),
+            ("Total Premium Recv",fmt_inr(op_premium),     "#16A34A", op_prem_pct),
             ("Nearest Expiry",
              f"{nearest_exp}d" if nearest_exp is not None else "—",
              "#DC2626" if nearest_exp is not None and nearest_exp <= 7 else "#111827"),
