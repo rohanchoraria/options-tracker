@@ -414,29 +414,18 @@ def _render_tab1():
 
     with st.expander("Current options positions", expanded=True):
         if open_trades:
-            holding_invested = {h["symbol"]: h["cost_price"] * h["quantity"] for h in holdings}
-            total_invested_all = sum(holding_invested.values())
-            def _prem_pct(t):
-                total_prem = t["premium_received"] * t["quantity"] * t["lot_size"]
-                invested = holding_invested.get(t["symbol"])
-                if invested and invested > 0:
-                    return f"{total_prem / invested * 100:.2f}%"
-                elif total_invested_all > 0:
-                    return f"{total_prem / total_invested_all * 100:.2f}% (portfolio)"
-                return "—"
             st.dataframe(pd.DataFrame([{
-                "Symbol":        t["symbol"],
-                "Direction":     (t.get("direction") or "sell").upper(),
-                "Type":          t["trade_type"].upper(),
-                "Strike (₹)":   round(t["strike_price"]),
-                "Expiry":        t["expiry_date"],
-                "Days Left":     calc.is_expiry_near(t["expiry_date"], 999)[1],
-                "Premium (₹)":  round(t["premium_received"], 1),
-                "Lots":          t["quantity"],
-                "Lot Size":      t["lot_size"],
-                "Total (₹)":    round(t["premium_received"]*t["quantity"]*t["lot_size"]),
-                "% of Invested": _prem_pct(t),
-                "Notes":         t.get("notes",""),
+                "Symbol":     t["symbol"],
+                "Direction":  (t.get("direction") or "sell").upper(),
+                "Type":       t["trade_type"].upper(),
+                "Strike (₹)": round(t["strike_price"]),
+                "Expiry":     t["expiry_date"],
+                "Days Left":  calc.is_expiry_near(t["expiry_date"], 999)[1],
+                "Premium (₹)":round(t["premium_received"], 1),
+                "Lots":       t["quantity"],
+                "Lot Size":   t["lot_size"],
+                "Total (₹)":  round(t["premium_received"]*t["quantity"]*t["lot_size"]),
+                "Notes":      t.get("notes",""),
             } for t in open_trades]), use_container_width=True, hide_index=True,
                 column_config={
                     "Strike (₹)":  st.column_config.NumberColumn(format="%.0f"),
