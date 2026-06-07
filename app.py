@@ -842,6 +842,12 @@ def _render_tab4():
     all_tr    = _get_trades()
     holdings4 = _get_holdings()
     eq_tr     = _get_equity_trades()
+
+    if holdings4 and st.button("🔄 Refresh Prices", key="refresh_prices_tab4"):
+        with st.spinner("Fetching prices..."):
+            st.session_state["prices"] = market.get_multiple_stock_prices(
+                [h["symbol"] for h in holdings4])
+
     prices4   = st.session_state.get("prices", {})
 
     closed_opts   = [t for t in all_tr if t["status"] in ("closed","expired","exercised")]
@@ -908,8 +914,7 @@ def _render_tab4():
     section_label("Unrealised Breakdown")
     u1, u2 = st.columns(2)
     u1.metric("Equity holdings (MTM)", fmt_inr(eq_unrealised),
-              delta=f"{eq_unrealised:+,.0f}",
-              help="Refresh Prices in Portfolio tab for live values.")
+              delta=f"{eq_unrealised:+,.0f}")
     u2.metric("Open options (MTM)", fmt_inr(opts_unrealised),
               delta=f"{opts_unrealised:+,.0f}",
               help="Refresh Risk Monitor (Tab 2) for live values.")
