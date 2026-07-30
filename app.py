@@ -529,12 +529,12 @@ def _render_tab1():
             if closed:
                 fc1, fc2 = st.columns(2)
                 tf = fc1.selectbox("Type", ["all","call","put"], key="hist_type")
-                mo = sorted(set(datetime.strptime(t["trade_date"],"%Y-%m-%d").strftime("%Y-%m")
+                mo = sorted(set(datetime.strptime(t["expiry_date"],"%Y-%m-%d").strftime("%Y-%m")
                                 for t in closed), reverse=True)
-                mf = fc2.selectbox("Month", ["all"]+mo, key="hist_month")
+                mf = fc2.selectbox("Month (by expiry)", ["all"]+mo, key="hist_month")
                 filtered = [t for t in closed
                             if (tf=="all" or t["trade_type"]==tf)
-                            and (mf=="all" or datetime.strptime(t["trade_date"],"%Y-%m-%d").strftime("%Y-%m")==mf)]
+                            and (mf=="all" or datetime.strptime(t["expiry_date"],"%Y-%m-%d").strftime("%Y-%m")==mf)]
                 hist_rows = []
                 for t in filtered:
                     pnl, _ = calc.trade_pnl(t["premium_received"], t.get("close_price") or 0,

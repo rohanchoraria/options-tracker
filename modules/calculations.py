@@ -92,19 +92,17 @@ def monthly_summary(trades):
     summary = defaultdict(lambda: {"premium_received": 0, "realised_pnl": 0, "open": 0, "closed": 0, "exercised": 0, "expired": 0})
 
     for t in trades:
-        trade_date = datetime.strptime(t["trade_date"], "%Y-%m-%d").date()
-        key = (trade_date.year, trade_date.month)
+        expiry_date = datetime.strptime(t["expiry_date"], "%Y-%m-%d").date()
+        key = (expiry_date.year, expiry_date.month)
         premium = t["premium_received"] * t["quantity"] * t["lot_size"]
         summary[key]["premium_received"] += premium
         summary[key][t["status"]] += 1
 
-        if t["status"] in ("closed", "expired"):
+        if t["status"] in ("closed", "expired", "exercised"):
             close_p = t.get("close_price") or 0
             pnl, _ = trade_pnl(t["premium_received"], close_p, t["quantity"], t["lot_size"],
                                 direction=t.get("direction", "sell"))
             summary[key]["realised_pnl"] += pnl
-        elif t["status"] == "open":
-            pass  # unrealised
 
     result = []
     for (year, month), data in sorted(summary.items(), reverse=True):
