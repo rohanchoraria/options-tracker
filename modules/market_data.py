@@ -206,6 +206,11 @@ def get_option_premium(symbol, strike, expiry, option_type):
 
 # ── F&O Stock List ────────────────────────────────────────
 
+_HISTORICAL_SYMBOLS = frozenset(
+    {"DALBHARAT", "EXIDEIND", "HUDCO", "LTIM", "NUVAMA", "TATATECH", "TORNTPOWER"}
+)
+
+
 def get_fo_stocks():
     """
     Fetch the list of all NSE F&O-eligible stocks.
@@ -215,92 +220,87 @@ def get_fo_stocks():
     session = _get_nse_session()
     if session:
         try:
-            url = "https://www.nseindia.com/api/equity-stockIndices?index=SECURITIES%20IN%20F%26O"
+            # master-quote returns the live F&O symbol list directly
+            url = "https://www.nseindia.com/api/master-quote"
             resp = session.get(url, headers=NSE_HEADERS, timeout=10)
             if resp.status_code == 200:
                 data = resp.json()
-                symbols = [
-                    item["symbol"] for item in data.get("data", [])
-                    if item.get("symbol") not in ("NIFTY 50", "")
-                ]
-                if symbols:
-                    return sorted(symbols)
+                if isinstance(data, list) and data:
+                    return sorted(data)
         except Exception:
             pass
 
-    # Fallback: hardcoded major F&O stocks
-    return sorted([
-        "RELIANCE", "TCS", "INFY", "HDFCBANK", "ICICIBANK", "WIPRO", "SBIN",
-        "AXISBANK", "BAJFINANCE", "BAJAJFINSV", "KOTAKBANK",
-        "HINDUNILVR", "ASIANPAINT", "MARUTI", "SUNPHARMA", "TITAN", "ULTRACEMCO",
-        "POWERGRID", "NTPC", "ONGC", "COALINDIA", "ADANIENT", "ADANIPORTS",
-        "TATASTEEL", "JSWSTEEL", "HINDALCO", "BHARTIARTL", "TECHM", "HCLTECH",
-        "LTIM", "DIVISLAB", "DRREDDY", "CIPLA", "APOLLOHOSP", "SBILIFE",
-        "HDFCLIFE", "ICICIPRULI", "BAJAJ-AUTO", "EICHERMOT", "HEROMOTOCO",
-        "M&M", "TATACONSUM", "ITC", "BRITANNIA", "PIDILITIND", "GRASIM",
-        "SHREECEM", "ACC", "AMBUJACEM", "INDUSINDBK", "FEDERALBNK", "BANDHANBNK",
-        "PNB", "BANKBARODA", "CANBK", "NAUKRI", "ETERNAL", "LT", "NESTLEIND",
-        "VEDL", "SAIL", "NMDC", "BHEL", "HAL", "BEL", "IRCTC", "DMART",
-        "BERGEPAINT", "MPHASIS", "COFORGE", "PERSISTENT",
-    ])
+    # Fallback: active F&O stocks as of Oct 2026 (excludes historical entries)
+    return sorted(s for s in LOT_SIZES if s not in _HISTORICAL_SYMBOLS)
 
 
 # ── Lot Sizes ─────────────────────────────────────────────
 # These change every 6 months (NSE revises in April and October).
-# Last updated: April 2025. Update when NSE publishes new lot sizes.
+# Last updated: October 2026 (source: NSE fo_mktlots.csv, fetched 2026-10-14).
+# Oct 2026 series effective ~2026-09-25 (day after Sep monthly expiry).
+# Stocks removed from F&O are kept at bottom for historical trade P&L.
 
 LOT_SIZES = {
-    # Last updated: April 2026 (source: NSE via optionperks.com)
+    # ── Active F&O stocks (213 as of Oct 2026) ──
     "360ONE": 500, "ABB": 125, "ABCAPITAL": 3100, "ADANIENSOL": 675,
     "ADANIENT": 309, "ADANIGREEN": 600, "ADANIPORTS": 475, "ADANIPOWER": 3550,
-    "ALKEM": 125, "AMBER": 100, "AMBUJACEM": 1050, "ANGELONE": 2500,
-    "APLAPOLLO": 350, "APOLLOHOSP": 125, "ASHOKLEY": 5000, "ASIANPAINT": 250,
-    "ASTRAL": 425, "AUBANK": 1000, "AUROPHARMA": 550, "AXISBANK": 625,
-    "BAJAJ-AUTO": 75, "BAJAJFINSV": 250, "BAJAJHLDNG": 50, "BAJFINANCE": 750,
-    "BANDHANBNK": 3600, "BANKBARODA": 2925, "BANKINDIA": 5200, "BDL": 350,
-    "BEL": 1425, "BHARATFORG": 500, "BHARTIARTL": 475, "BHEL": 2625,
-    "BIOCON": 2500, "BLUESTARCO": 325, "BOSCHLTD": 25, "BPCL": 1975,
-    "BRITANNIA": 125, "BSE": 375, "CAMS": 750, "CANBK": 6750,
-    "CDSL": 475, "CGPOWER": 850, "CHOLAFIN": 625, "CIPLA": 375,
-    "COALINDIA": 1350, "COCHINSHIP": 400, "COFORGE": 375, "COLPAL": 225,
-    "CONCOR": 1250, "CROMPTON": 1800, "CUMMINSIND": 200, "DABUR": 1250,
-    "DALBHARAT": 325, "DELHIVERY": 2075, "DIVISLAB": 100, "DIXON": 50,
-    "DLF": 825, "DMART": 150, "DRREDDY": 625, "EICHERMOT": 100,
-    "ETERNAL": 2425, "EXIDEIND": 1800, "FEDERALBNK": 5000, "FORCEMOT": 25,
-    "FORTIS": 775, "GAIL": 3150, "GLENMARK": 375, "GMRAIRPORT": 6975,
-    "GODREJCP": 500, "GODREJPROP": 275, "GRASIM": 250, "HAL": 150,
-    "HAVELLS": 500, "HCLTECH": 350, "HDFCAMC": 300, "HDFCBANK": 550,
-    "HDFCLIFE": 1100, "HEROMOTOCO": 150, "HINDALCO": 700, "HINDPETRO": 2025,
-    "HINDUNILVR": 300, "HINDZINC": 1225, "HUDCO": 2775, "HYUNDAI": 275,
-    "ICICIBANK": 700, "ICICIGI": 325, "ICICIPRULI": 925, "IDFCFIRSTB": 9275,
-    "IEX": 3750, "INDHOTEL": 1000, "INDIANB": 1000, "INDIGO": 150,
-    "INDUSINDBK": 700, "INDUSTOWER": 1700, "INFY": 400, "INOXWIND": 3575,
-    "IOC": 4875, "IREDA": 3450, "IRFC": 4250, "ITC": 1600,
-    "JINDALSTEL": 625, "JIOFIN": 2350, "JSWENERGY": 1000, "JSWSTEEL": 675,
-    "JUBLFOOD": 1250, "KALYANKJIL": 1175, "KAYNES": 100, "KEI": 175,
-    "KFINTECH": 500, "KOTAKBANK": 2000, "KPITTECH": 425, "LAURUSLABS": 850,
-    "LICHSGFIN": 1000, "LICI": 700, "LODHA": 450, "LT": 175, "LTF": 2250,
-    "LTM": 150, "LTIM": 150, "LUPIN": 425, "M&M": 200, "MANAPPURAM": 3000,
-    "MANKIND": 225, "MARICO": 1200, "MARUTI": 50, "MAXHEALTH": 525,
-    "MAZDOCK": 200, "MCX": 625, "MFSL": 400, "MOTHERSON": 6150,
-    "MOTILALOFS": 775, "MPHASIS": 275, "MUTHOOTFIN": 275, "NAUKRI": 375,
-    "NBCC": 6500, "NESTLEIND": 500, "NHPC": 6400, "NMDC": 6750,
-    "NTPC": 1500, "NUVAMA": 500, "NYKAA": 3125, "OBEROIRLTY": 350,
-    "OFSS": 75, "OIL": 1400, "ONGC": 2250, "PAGEIND": 15,
-    "PATANJALI": 900, "PAYTM": 725, "PERSISTENT": 100, "PETRONET": 1900,
-    "PFC": 1300, "PHOENIXLTD": 350, "PIDILITIND": 500, "PIIND": 175,
-    "PNB": 8000, "PNBHOUSING": 650, "POLICYBZR": 350, "POLYCAB": 125,
-    "POWERGRID": 1900, "PRESTIGE": 450, "RBLBANK": 3175, "RECLTD": 1400,
-    "RELIANCE": 500, "RVNL": 1525, "SAIL": 4700, "SBICARD": 800,
-    "SBILIFE": 375, "SBIN": 750, "SHREECEM": 25, "SHRIRAMFIN": 825,
-    "SIEMENS": 175, "SOLARINDS": 50, "SONACOMS": 1225, "SRF": 200,
-    "SUNPHARMA": 350, "SUPREMEIND": 175, "SUZLON": 9025, "SWIGGY": 1300,
-    "TATACONSUM": 550, "TATAELXSI": 100, "TATAPOWER": 1450, "TATASTEEL": 5500,
-    "TATATECH": 800, "TCS": 175, "TECHM": 600, "TIINDIA": 200,
-    "TITAN": 175, "TORNTPHARM": 250, "TORNTPOWER": 425, "TRENT": 100,
-    "TVSMOTOR": 175, "ULTRACEMCO": 50, "UNIONBANK": 4425, "UNITDSPR": 400,
-    "UNOMINDA": 550, "UPL": 1355, "VBL": 1125, "VEDL": 1150,
-    "VOLTAS": 375, "WAAREEENER": 175, "WIPRO": 3000, "ZYDUSLIFE": 900,
+    "ALKEM": 125, "AMBER": 100, "AMBUJACEM": 1200, "ANANDRATHI": 250,
+    "ANGELONE": 2500, "APLAPOLLO": 350, "APOLLOHOSP": 125, "ASHOKLEY": 5000,
+    "ASIANPAINT": 250, "ASTRAL": 425, "ATHERENERG": 375, "AUBANK": 1000,
+    "AUROPHARMA": 550, "AXISBANK": 625, "BAJAJ-AUTO": 75, "BAJAJFINSV": 300,
+    "BAJAJHLDNG": 75, "BAJFINANCE": 750, "BANDHANBNK": 3600, "BANKBARODA": 2925,
+    "BANKINDIA": 5200, "BDL": 425, "BEL": 1425, "BHARATFORG": 500,
+    "BHARTIARTL": 475, "BHEL": 2625, "BIOCON": 2500, "BLUESTARCO": 325,
+    "BOSCHLTD": 25, "BPCL": 1975, "BRITANNIA": 125, "BSE": 200,
+    "CAMS": 825, "CANBK": 6750, "CDSL": 475, "CGPOWER": 850,
+    "CHOLAFIN": 625, "CIPLA": 425, "COALINDIA": 1350, "COCHINSHIP": 400,
+    "COFORGE": 475, "COLPAL": 275, "CONCOR": 1250, "CROMPTON": 2150,
+    "CUMMINSIND": 200, "DABUR": 1250, "DELHIVERY": 2075, "DIVISLAB": 100,
+    "DIXON": 50, "DLF": 950, "DMART": 150, "DRREDDY": 625,
+    "EICHERMOT": 100, "ENRIN": 175, "ETERNAL": 2425, "FEDERALBNK": 2500,
+    "FORCEMOT": 25, "FORTIS": 775, "GAIL": 3550, "GLENMARK": 375,
+    "GMRAIRPORT": 6975, "GODFRYPHLP": 275, "GODREJCP": 500, "GODREJPROP": 325,
+    "GRASIM": 250, "GVT&D": 125, "HAL": 150, "HAVELLS": 500,
+    "HCLTECH": 400, "HDFCAMC": 300, "HDFCBANK": 650, "HDFCLIFE": 1100,
+    "HEROMOTOCO": 150, "HINDALCO": 700, "HINDPETRO": 2025, "HINDUNILVR": 300,
+    "HINDZINC": 1225, "HYUNDAI": 275, "ICICIBANK": 700, "ICICIGI": 325,
+    "ICICIPRULI": 925, "IDEA": 71475, "IDFCFIRSTB": 9275, "IEX": 4350,
+    "INDHOTEL": 1000, "INDIANB": 1000, "INDIGO": 150, "INDUSINDBK": 700,
+    "INDUSTOWER": 1700, "INFY": 400, "INOXWIND": 6400, "IOC": 4875,
+    "IREDA": 4525, "IRFC": 5425, "ITC": 1725, "JINDALSTEL": 625,
+    "JIOFIN": 2350, "JSWENERGY": 1075, "JSWSTEEL": 675, "JUBLFOOD": 1250,
+    "KALYANKJIL": 1350, "KAYNES": 150, "KEI": 175, "KFINTECH": 575,
+    "KOTAKBANK": 2000, "KPITTECH": 775, "LAURUSLABS": 850, "LICHSGFIN": 1000,
+    "LICI": 1400, "LODHA": 625, "LT": 175, "LTF": 2250,
+    "LTM": 150, "LUPIN": 425, "M&M": 200, "MAHABANK": 6500,
+    "MANAPPURAM": 3000, "MANKIND": 250, "MARICO": 1200, "MARUTI": 50,
+    "MAXHEALTH": 525, "MAZDOCK": 225, "MCX": 225, "MFSL": 400,
+    "MOTHERSON": 6150, "MOTILALOFS": 775, "MPHASIS": 275, "MUTHOOTFIN": 275,
+    "NAM-INDIA": 625, "NATIONALUM": 1875, "NAUKRI": 550, "NBCC": 6500,
+    "NESTLEIND": 500, "NHPC": 6950, "NMDC": 6750, "NTPC": 1500,
+    "NYKAA": 3125, "OBEROIRLTY": 350, "OFSS": 100, "OIL": 1400,
+    "ONGC": 2250, "PAGEIND": 20, "PATANJALI": 1075, "PAYTM": 725,
+    "PERSISTENT": 125, "PETRONET": 1900, "PFC": 1300, "PGEL": 950,
+    "PHOENIXLTD": 350, "PIDILITIND": 500, "PIIND": 175, "PNB": 8000,
+    "PNBHOUSING": 650, "POLICYBZR": 350, "POLYCAB": 125, "POWERGRID": 1900,
+    "POWERINDIA": 25, "PREMIERENE": 650, "PRESTIGE": 450, "RADICO": 150,
+    "RBLBANK": 3175, "RECLTD": 1575, "RELIANCE": 500, "RVNL": 1925,
+    "SAGILITY": 12000, "SAIL": 4700, "SBICARD": 800, "SBILIFE": 375,
+    "SBIN": 750, "SHREECEM": 25, "SHRIRAMFIN": 825, "SIEMENS": 175,
+    "SOLARINDS": 50, "SONACOMS": 1225, "SRF": 200, "SUNPHARMA": 350,
+    "SUPREMEIND": 175, "SUZLON": 12700, "SWIGGY": 1825, "TATACONSUM": 550,
+    "TATAELXSI": 125, "TATAPOWER": 1450, "TATASTEEL": 2750, "TCS": 225,
+    "TECHM": 600, "TIINDIA": 200, "TITAN": 175, "TMPV": 1600,
+    "TORNTPHARM": 125, "TRENT": 225, "TVSMOTOR": 175, "UJJIVANSFB": 8000,
+    "ULTRACEMCO": 50, "UNIONBANK": 4425, "UNITDSPR": 400, "UNOMINDA": 550,
+    "UPL": 1355, "VBL": 1275, "VEDL": 1150, "VMM": 4850,
+    "VOLTAS": 375, "WAAREEENER": 175, "WIPRO": 3000, "YESBANK": 31100,
+    "ZYDUSLIFE": 900,
+    # ── Removed from F&O — kept for historical trade P&L ──
+    "DALBHARAT": 325, "EXIDEIND": 1800, "HUDCO": 2775, "LTIM": 150,
+    "NUVAMA": 500,
+    # ── Other historical entries ──
+    "TATATECH": 800, "TORNTPOWER": 425,
 }
 
 
