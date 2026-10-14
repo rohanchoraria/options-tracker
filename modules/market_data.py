@@ -206,42 +206,9 @@ def get_option_premium(symbol, strike, expiry, option_type):
 
 # ── F&O Stock List ────────────────────────────────────────
 
-_HISTORICAL_SYMBOLS = frozenset(
-    {"DALBHARAT", "EXIDEIND", "HUDCO", "LTIM", "NUVAMA", "TATATECH", "TORNTPOWER"}
-)
 
-
-def get_fo_stocks():
-    """
-    Fetch the list of all NSE F&O-eligible stocks.
-    Returns list of symbol strings.
-    Falls back to hardcoded list if API fails.
-    """
-    session = _get_nse_session()
-    if session:
-        try:
-            # master-quote returns the live F&O symbol list directly
-            url = "https://www.nseindia.com/api/master-quote"
-            resp = session.get(url, headers=NSE_HEADERS, timeout=10)
-            if resp.status_code == 200:
-                data = resp.json()
-                if isinstance(data, list) and data:
-                    return sorted(data)
-        except Exception:
-            pass
-
-    # Fallback: active F&O stocks as of Oct 2026 (excludes historical entries)
-    return sorted(s for s in LOT_SIZES if s not in _HISTORICAL_SYMBOLS)
-
-
-# ── Lot Sizes ─────────────────────────────────────────────
-# These change every 6 months (NSE revises in April and October).
-# Last updated: October 2026 (source: NSE fo_mktlots.csv, fetched 2026-10-14).
-# Oct 2026 series effective ~2026-09-25 (day after Sep monthly expiry).
-# Stocks removed from F&O are kept at bottom for historical trade P&L.
-
+# ── Lot Sizes (static fallback — auto-refreshed live by _fetch_live_lot_sizes) ─
 LOT_SIZES = {
-    # ── Active F&O stocks (213 as of Oct 2026) ──
     "360ONE": 500, "ABB": 125, "ABCAPITAL": 3100, "ADANIENSOL": 675,
     "ADANIENT": 309, "ADANIGREEN": 600, "ADANIPORTS": 475, "ADANIPOWER": 3550,
     "ALKEM": 125, "AMBER": 100, "AMBUJACEM": 1200, "ANANDRATHI": 250,
@@ -296,14 +263,89 @@ LOT_SIZES = {
     "UPL": 1355, "VBL": 1275, "VEDL": 1150, "VMM": 4850,
     "VOLTAS": 375, "WAAREEENER": 175, "WIPRO": 3000, "YESBANK": 31100,
     "ZYDUSLIFE": 900,
-    # ── Removed from F&O — kept for historical trade P&L ──
+    # historical — kept for trade P&L
     "DALBHARAT": 325, "EXIDEIND": 1800, "HUDCO": 2775, "LTIM": 150,
-    "NUVAMA": 500,
-    # ── Other historical entries ──
-    "TATATECH": 800, "TORNTPOWER": 425,
+    "NUVAMA": 500, "TATATECH": 800, "TORNTPOWER": 425,
 }
 
 
-def get_lot_size(symbol):
-    """Return lot size for a symbol. Defaults to 1 if unknown."""
-    return LOT_SIZES.get(symbol.upper(), 1)
+# ── Live lot-size fetch (auto-refreshes daily from NSE) ───────────────────────
+
+_live_lot_sizes: dict = {}
+_live_lot_sizes_ts: float = 0.0
+_LIVE_LOT_TTL = 86400  # 24 hours
+
+
+def _fetch_live_lot_sizes() -> dict:
+    """
+    Fetch current lot sizes from NSE fo_mktlots.csv.
+    Returns {symbol: lot_size}. Falls back to hardcoded LOT_SIZES on failure.
+    """
+    global _live_lot_sizes, _live_lot_sizes_ts
+    now = time.time()
+    if _live_lot_sizes and (now - _live_lot_sizes_ts) < _LIVE_LOT_TTL:
+        return _live_lot_sizes
+
+    try:
+        import io, csv as _csv
+        session = _get_nse_session()
+        if not session:
+            raise RuntimeError("no session")
+        r = session.get(
+            "https://nsearchives.nseindia.com/content/fo/fo_mktlots.csv",
+            headers=NSE_HEADERS, timeout=15,
+        )
+        r.raise_for_status()
+        sizes = {}
+        in_stocks = False
+        for row in _csv.reader(io.StringIO(r.text)):
+            if not row:
+                continue
+            if row[0].strip() == "Derivatives on Individual Securities":
+                in_stocks = True
+                continue
+            sym = row[1].strip() if len(row) > 1 else ""
+            lot = row[2].strip() if len(row) > 2 else ""
+            if in_stocks and sym and lot.isdigit() and sym != "Symbol":
+                sizes[sym] = int(lot)
+        if sizes:
+            _live_lot_sizes = sizes
+            _live_lot_sizes_ts = now
+            return sizes
+    except Exception:
+        pass
+
+    return LOT_SIZES  # fallback
+
+
+_HISTORICAL_SYMBOLS = frozenset(
+    {"DALBHARAT", "EXIDEIND", "HUDCO", "LTIM", "NUVAMA", "TATATECH", "TORNTPOWER"}
+)
+
+
+def get_lot_size(symbol: str) -> int:
+    """Return current lot size for a symbol. Defaults to 1 if unknown."""
+    sym = symbol.upper()
+    return _fetch_live_lot_sizes().get(sym) or LOT_SIZES.get(sym, 1)
+
+
+def get_fo_stocks() -> list:
+    """
+    Return list of all active NSE F&O stock symbols.
+    Uses live NSE master-quote API; falls back to live lot sizes keys.
+    """
+    session = _get_nse_session()
+    if session:
+        try:
+            resp = session.get(
+                "https://www.nseindia.com/api/master-quote",
+                headers=NSE_HEADERS, timeout=10,
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                if isinstance(data, list) and data:
+                    return sorted(data)
+        except Exception:
+            pass
+    sizes = _fetch_live_lot_sizes()
+    return sorted(s for s in sizes if s not in _HISTORICAL_SYMBOLS)
