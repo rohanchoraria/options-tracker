@@ -176,7 +176,7 @@ def _render_tab1():
     with c1:
         with st.expander("➕ Add Holding"):
             with st.form("form_add_holding"):
-                sym   = st.selectbox("Symbol", [""] + sorted(upstox.INSTRUMENT_KEYS.keys()))
+                sym   = st.selectbox("Symbol", [""] + market.get_fo_stocks())
                 qty   = st.number_input("Quantity", min_value=1, step=1)
                 cp    = st.number_input("Cost Price (₹)", min_value=0.01, format="%.2f")
                 da    = st.date_input("Date Added", value=date.today())
@@ -329,7 +329,7 @@ def _render_tab1():
     c1, c2 = st.columns(2)
     with c1:
         with st.expander("➕ Add Trade"):
-            known_syms = sorted(upstox.INSTRUMENT_KEYS.keys())
+            known_syms = market.get_fo_stocks()
             t_sym = st.selectbox("Symbol", [""] + known_syms, key="add_trade_sym")
             auto_lot = market.get_lot_size(t_sym) if t_sym else 1
             if t_sym:
@@ -739,7 +739,7 @@ def _render_tab3():
         wc1, wc2 = st.columns(2)
         with wc1:
             with st.form("form_add_wl", clear_on_submit=True):
-                new_wl = st.selectbox("Add symbol", [""] + sorted(upstox.INSTRUMENT_KEYS.keys()))
+                new_wl = st.selectbox("Add symbol", [""] + market.get_fo_stocks())
                 if st.form_submit_button("Add") and new_wl:
                     db.add_to_watchlist(new_wl)
                     _clear_db_cache()
@@ -788,7 +788,7 @@ def _render_tab3():
     min_call = sc1.number_input("Min Call %", 0.0, 10.0, 0.0, 0.25)
     min_put  = sc2.number_input("Min Put %",  0.0, 10.0, 0.0, 0.25)
     if sc4.button("🔄 Scan All F&O Stocks", use_container_width=True):
-        fo      = sorted(upstox.INSTRUMENT_KEYS.keys())
+        fo      = market.get_fo_stocks()
         prog    = st.progress(0)
         _tok_sc = st.session_state.get("upstox_token")
         res     = []
